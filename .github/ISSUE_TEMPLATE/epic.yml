@@ -1,0 +1,40 @@
+name: "🎯 Epic"
+description: A milestone-sized body of work with a task checklist.
+title: "[Epic] "
+labels: ["epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Epics map 1:1 to milestones (M0…M6). The checklist below is broken
+        into issues by agents via the Spec Kit loop at milestone kickoff.
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: e.g. "M3 — Commerce"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal & exit criteria
+      description: What must be demonstrable end-to-end when this epic is done.
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Task checklist
+      description: Checked off as issues are created/closed.
+      value: |
+        - [ ] ...
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: deps
+    attributes:
+      label: Dependencies & cross-cutting concerns
+      description: Other epics, shared schemas, contracts at risk.
+      render: markdown

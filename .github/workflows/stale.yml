@@ -1,0 +1,25 @@
+name: Stale bot
+on:
+  schedule:
+    - cron: "30 4 * * *"
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 21
+          days-before-issue-close: 7
+          stale-issue-label: stale
+          exempt-issue-labels: epic,security,blocked,agent:architect
+          stale-issue-message: >
+            This issue has been inactive for 21 days. If it is still
+            relevant, comment or move it on the project board; otherwise it
+            will be closed in 7 days.
+          close-issue-message: Closing as inactive. Reopen if needed.
+          days-before-pr-stale: 10
+          days-before-pr-close: 5

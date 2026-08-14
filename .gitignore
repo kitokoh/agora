@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Local data
+data/
+.tmp/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log

@@ -1,0 +1,34 @@
+name: "🧭 ADR proposal"
+description: Propose an architecture decision (follow docs/decisions/README).
+title: "[ADR] "
+labels: ["adr", "agent:architect"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Template: `docs/decisions/ADR-XXXX-<slug>.md` — Status, Context,
+        Decision, Consequences, Alternatives. Ratified by `agent:architect`.
+  - type: input
+    id: number
+    attributes:
+      label: Proposed ADR number
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Decision summary (1–3 sentences)
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & alternatives considered
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected consequences (cost/benefit)
+      render: markdown

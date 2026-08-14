@@ -1,0 +1,31 @@
+{
+  "name": "agora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agora — industrial-grade marketplace SaaS for boutiques and independent sellers.",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "changeset": "changeset",
+    "db:generate": "pnpm --filter @agora/db generate",
+    "db:migrate": "pnpm --filter @agora/db migrate",
+    "db:studio": "pnpm --filter @agora/db studio"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "prettier": "^3.3.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

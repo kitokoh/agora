@@ -1,0 +1,79 @@
+# ============================================================================
+# Agora — local development environment (docker compose)
+# Mirrors the production topology on AWS (see docs/architecture.md):
+#   PostgreSQL 16 (RDS Aurora)  ·  Redis 7 (ElastiCache)
+#   MinIO (S3)                  ·  Meilisearch (OpenSearch-analog)
+# ============================================================================
+name: agora
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agora-postgres
+    environment:
+      POSTGRES_USER: agora
+      POSTGRES_PASSWORD: agora
+      POSTGRES_DB: agora
+    ports:
+      - "5432:5432"
+    volumes:
+      - agora-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agora -d agora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: agora-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - agora-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: agora-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: agora
+      MINIO_ROOT_PASSWORD: agora-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - agora-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    container_name: agora-meilisearch
+    environment:
+      MEILI_MASTER_KEY: agora-master-key
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - agora-meili:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  agora-postgres:
+  agora-redis:
+  agora-minio:
+  agora-meili:

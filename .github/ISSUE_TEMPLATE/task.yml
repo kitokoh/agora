@@ -1,0 +1,42 @@
+name: "🔧 Task"
+description: A single implementable, testable unit of work for an agent.
+title: ""
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One task = one PR-sized unit of work. Definition of Done in
+        AGENTS.md §3.
+  - type: input
+    id: spec
+    attributes:
+      label: Linked spec
+      description: "`specs/<NNN>-<name>/spec.md` (or ADR for architecture work)"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, testable outcomes.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Likely files touched
+      render: markdown
+  - type: input
+    id: deps
+    attributes:
+      label: Depends on (issue #)
+  - type: checkboxes
+    id: labels
+    attributes:
+      label: Labels to apply
+      options:
+        - label: area label (infra/identity/catalog/search/commerce/payments/finance/seller-ops/admin/frontend/design)
+        - label: agent label (architect/backend/frontend/devops/qa/security)

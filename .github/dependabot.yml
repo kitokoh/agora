@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: pnpm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "agent:devops"]
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      typescript-tooling:
+        patterns: ["typescript", "tsx", "@types/*"]
+      testing:
+        patterns: ["vitest", "playwright", "@playwright/*"]
+      react:
+        patterns: ["react", "react-dom", "next", "next-*"]
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
