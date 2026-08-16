@@ -10,6 +10,8 @@ declare module 'fastify' {
 
 export interface PrismaPluginOptions {
   client?: PrismaClient;
+  /** Explicit DATABASE_URL (overrides ambient env/.env — tests use isolated DBs). */
+  datasourceUrl?: string;
 }
 
 /**
@@ -18,7 +20,7 @@ export interface PrismaPluginOptions {
  */
 export const prismaPlugin = fp(
   async (app: FastifyInstance, options: PrismaPluginOptions): Promise<void> => {
-    const client = options.client ?? createPrismaClient();
+    const client = options.client ?? createPrismaClient({ datasourceUrl: options.datasourceUrl });
     app.decorate('prisma', client);
     app.addHook('onClose', async () => {
       await client.$disconnect();

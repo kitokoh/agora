@@ -11,6 +11,7 @@ import {
 import type { SessionService } from '../sessions.service.js';
 import type { AuthRateLimiter } from '../rate-limit.service.js';
 import type { PasswordService } from '../password.service.js';
+import type { MfaService } from '../mfa.service.js';
 import { type OneTimeTokenService, PASSWORD_RESET_TTL_MS } from '../tokens.service.js';
 import { type AuditService } from '../audit.service.js';
 import { type NotificationService } from '../../notification/notification.module.js';
@@ -28,6 +29,7 @@ export interface SessionRoutesDeps {
   tokens: OneTimeTokenService;
   audit: AuditService;
   notifications: NotificationService;
+  mfa?: MfaService;
 }
 
 const LOGIN_WINDOW_SECONDS = 15 * 60;
@@ -78,9 +80,16 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
       // Lockout cleared on success.
       await rateLimiter.reset('login', email);
 
-      // MFA gate: challenge issued; tokens follow the TOTP step (#26).
-      if (user.mfaEnabled) {
+      // MFA gate (FR-004): challenge when enabled; enforcement for
+      // seller/staff roles even before enrollment.
+      const roles = await sessions.loadRoles(user.id);
+      const privileged = roles.some((r) => r === 'seller' || r === 'staff' || r === 'admin');
+      if (user.mfaEnabled || (privileged && !user.mfaEnabled)) {
         if (!mfaCode) {
+          if (!user.mfaEnabled) {
+            // Privileged role without MFA: must enroll first.
+            throw new ApiError(428, 'MFA_SETUP_REQUIRED', 'Set up MFA before continuing (seller/staff accounts)');
+          }
           const challenge = await sessions.signMfaChallenge(user.id, user.email);
           await audit.record(
             { actorType: 'user', actorId: user.id, ...requestCtx },
@@ -90,11 +99,14 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
           );
           return reply.code(200).send({ mfaRequired: true, challenge, userId: user.id });
         }
-        // Full TOTP verification lands with #26; until then a code is invalid.
-        throw new ApiError(401, 'INVALID_MFA_CODE', 'MFA verification is not available yet');
+        // Complete login with the TOTP code.
+        if (!deps.mfa) throw new ApiError(500, 'MFA_UNAVAILABLE', 'MFA is not configured');
+        if (!deps.mfa.verifyCode(user.id, user.mfaSecretEnc, mfaCode)) {
+          await rateLimiter.recordFailure('mfa', user.id, 10, 15 * 60, { actorId: user.id, ...requestCtx });
+          throw new ApiError(401, 'INVALID_MFA_CODE', 'MFA verification failed');
+        }
       }
 
-      const roles = await sessions.loadRoles(user.id);
       const shopIds = await sessions.loadShopIds(user.id);
       const result = await sessions.issueTokens(user.id, user.email, roles, shopIds, requestCtx);
 

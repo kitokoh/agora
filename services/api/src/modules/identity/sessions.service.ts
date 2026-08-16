@@ -134,6 +134,21 @@ export class SessionService {
       .sign(this.keyPair.privateKey);
   }
 
+  /** Verify a short-lived MFA challenge token (issued at login). */
+  async verifyMfaChallenge(challenge: string): Promise<{ userId: string; email: string }> {
+    try {
+      const { payload } = await jwtVerify(challenge, this.keyPair.publicKey, {
+        issuer: 'agora-api',
+        audience: 'agora-clients',
+        algorithms: ['RS256'],
+      });
+      if (payload.typ !== 'mfa-challenge' || !payload.sub) throw new Error('not a challenge');
+      return { userId: payload.sub, email: (payload.email as string) ?? '' };
+    } catch {
+      throw new ApiError(401, 'MFA_CHALLENGE_INVALID', 'MFA challenge is invalid or expired');
+    }
+  }
+
   async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
     try {
       const { payload } = await jwtVerify(token, this.keyPair.publicKey, {
