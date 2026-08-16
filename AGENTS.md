@@ -18,7 +18,7 @@ measures: if it ships, it ships tested, observable, documented, and secure.
 apps/web          Buyer marketplace + storefronts        (Next.js 15, App Router)
 apps/dashboard    Seller back-office                     (Next.js 15)
 apps/admin        Platform admin back-office             (Next.js 15)
-services/api      Backend API — modular monolith         (Node 20, Fastify)
+services/api      Backend API — modular monolith         (Node 22 LTS, Fastify)
 packages/ui       Design system (Radix + Tailwind, Storybook)
 packages/contracts  API contracts (OpenAPI/Zod, source of truth)
 packages/db       Prisma schema + migrations (shared)
@@ -143,4 +143,4 @@ The Constitution supersedes all other local practices. Amendments require an
 issue proposing the change, an ADR when architectural, and this file updated
 in the same PR.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-14 | **Last Amended**: 2026-08-14
+**Version**: 1.0.1 | **Ratified**: 2026-08-14 | **Last Amended**: 2026-08-16
