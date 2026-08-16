@@ -83,6 +83,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  integration:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agora
+          POSTGRES_PASSWORD: agora
+          POSTGRES_DB: agora_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agora -d agora_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      RUN_DB_TESTS: '1'
+      TEST_DATABASE_URL: postgresql://agora:agora@localhost:5432/agora_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prisma migrations + integration tests
+        run: pnpm --filter @agora/db build && pnpm --filter @agora/api test
+
   e2e:
     name: E2E (critical journeys)
     runs-on: ubuntu-latest

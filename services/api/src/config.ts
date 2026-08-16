@@ -21,6 +21,8 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001,http://localhost:3002'),
   /** Global rate limit: requests per minute per IP. */
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  /** Public web app base URL (used in verification/reset email links). */
+  PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

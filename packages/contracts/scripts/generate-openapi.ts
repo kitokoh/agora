@@ -12,6 +12,9 @@ import {
   authLoginResponse,
   authRegisterRequest,
   authRegisterResponse,
+  authVerifyRequest,
+  authVerifyResponse,
+  authVerifyResendRequest,
   errorEnvelope,
   healthResponse,
   readyResponse,
@@ -67,6 +70,31 @@ const document = createDocument({
         responses: {
           '201': { description: 'Account created (unverified)', content: { 'application/json': { schema: authRegisterResponse } } },
           '409': { description: 'Email already registered', content: { 'application/json': { schema: errorEnvelope } } },
+          '429': { description: 'Rate limited', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/auth/verify': {
+      post: {
+        operationId: 'authVerify',
+        summary: 'Verify email with one-time token (M1)',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: authVerifyRequest } } },
+        responses: {
+          '200': { description: 'Email verified', content: { 'application/json': { schema: authVerifyResponse } } },
+          '400': { description: 'Invalid token', content: { 'application/json': { schema: errorEnvelope } } },
+          '410': { description: 'Expired or reused token', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/auth/verify/resend': {
+      post: {
+        operationId: 'authVerifyResend',
+        summary: 'Re-send verification email (rate limited, non-enumerating)',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: authVerifyResendRequest } } },
+        responses: {
+          '200': { description: 'Accepted (never reveals account existence)', content: { 'application/json': { schema: authVerifyResponse } } },
           '429': { description: 'Rate limited', content: { 'application/json': { schema: errorEnvelope } } },
         },
       },

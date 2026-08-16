@@ -115,6 +115,98 @@
         }
       }
     },
+    "/v1/auth/verify": {
+      "post": {
+        "operationId": "authVerify",
+        "summary": "Verify email with one-time token (M1)",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthVerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Expired or reused token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/verify/resend": {
+      "post": {
+        "operationId": "authVerifyResend",
+        "summary": "Re-send verification email (rate limited, non-enumerating)",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthVerifyResendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted (never reveals account existence)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthVerifyResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "operationId": "authLogin",
@@ -337,6 +429,53 @@
           "userId",
           "email",
           "status"
+        ]
+      },
+      "AuthVerifyRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256,
+            "description": "One-time verification token from the email link",
+            "example": "a1b2c3…"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "AuthVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "verified"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          }
+        },
+        "required": [
+          "status",
+          "userId"
+        ]
+      },
+      "AuthVerifyResendRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
         ]
       },
       "AuthLoginRequest": {

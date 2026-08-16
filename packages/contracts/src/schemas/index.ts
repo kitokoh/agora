@@ -74,7 +74,7 @@ export type ReadyResponse = z.infer<typeof readyResponse>;
 
 export const authRegisterRequest = z
   .object({
-    email: z.string().email().max(320).openapi({
+    email: z.string().trim().email().max(320).openapi({
       description: 'Email address (stored lowercased)',
       example: 'seller@example.com',
     }),
@@ -100,7 +100,7 @@ export type AuthRegisterResponse = z.infer<typeof authRegisterResponse>;
 
 export const authLoginRequest = z
   .object({
-    email: z.string().email().max(320),
+    email: z.string().trim().email().max(320),
     password: z.string().min(1).max(128),
     mfaCode: z.string().length(6).optional().openapi({ description: 'TOTP code when MFA is enabled' }),
   })
@@ -124,3 +124,31 @@ export const authLoginResponse = z
   .openapi({ ref: "AuthLoginResponse" });
 
 export type AuthLoginResponse = z.infer<typeof authLoginResponse>;
+
+export const authVerifyRequest = z
+  .object({
+    token: z.string().min(32).max(256).openapi({
+      description: 'One-time verification token from the email link',
+      example: 'a1b2c3…',
+    }),
+  })
+  .openapi({ ref: 'AuthVerifyRequest' });
+
+export type AuthVerifyRequest = z.infer<typeof authVerifyRequest>;
+
+export const authVerifyResponse = z
+  .object({
+    status: z.literal('verified'),
+    userId: uuid,
+  })
+  .openapi({ ref: 'AuthVerifyResponse' });
+
+export type AuthVerifyResponse = z.infer<typeof authVerifyResponse>;
+
+export const authVerifyResendRequest = z
+  .object({
+    email: z.string().trim().email().max(320),
+  })
+  .openapi({ ref: 'AuthVerifyResendRequest' });
+
+export type AuthVerifyResendRequest = z.infer<typeof authVerifyResendRequest>;

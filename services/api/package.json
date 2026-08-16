@@ -16,12 +16,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@agora/contracts": "workspace:^",
+    "@agora/db": "workspace:^",
     "@agora/observability": "workspace:^",
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.0",
     "@fastify/rate-limit": "^11.2.0",
+    "@node-rs/argon2": "^2.1.0",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.0",
+    "jose": "^6.2.9",
     "pino": "^9.4.0",
     "zod": "^3.23.0"
   },

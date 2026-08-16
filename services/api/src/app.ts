@@ -4,15 +4,26 @@ import type { Logger } from 'pino';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { healthPlugin } from './plugins/health.js';
 import { securityPlugin } from './plugins/security.js';
+import { errorHandlerPlugin } from './plugins/error-handler.js';
+import { prismaPlugin } from './plugins/db.js';
+import type { EmailTransport } from './modules/notification/notification.module.js';
 import { redisProbe } from './infra/redis-probe.js';
 import { registerModules } from './modules/index.js';
 import type { AppConfig } from './config.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    config: AppConfig;
+  }
+}
 
 export interface BuildAppOptions {
   logger: Logger;
   config: AppConfig;
   /** Overrides for tests: disable the request logger, custom body limit, etc. */
   serverOptions?: Partial<FastifyServerOptions>;
+  /** Email transport for the notification module (tests capture messages). */
+  emailTransport?: EmailTransport;
 }
 
 /**
@@ -25,6 +36,7 @@ export async function buildApp({
   logger,
   config,
   serverOptions,
+  emailTransport,
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     loggerInstance: logger,
@@ -41,7 +53,14 @@ export async function buildApp({
     ...serverOptions,
   });
 
+  app.decorate('config', config);
+  if (emailTransport) {
+    app.decorate('emailTransport', emailTransport);
+  }
+
   await app.register(requestIdPlugin);
+  await app.register(errorHandlerPlugin);
+  await app.register(prismaPlugin);
   await app.register(securityPlugin, {
     corsOrigins: config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
     globalRateLimit: { max: config.RATE_LIMIT_MAX, timeWindowMs: 60_000 },
