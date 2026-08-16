@@ -8,7 +8,7 @@ const logger = createLogger(config);
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 async function main(): Promise<void> {
-  const app = await buildApp({ logger });
+  const app = await buildApp({ logger, config });
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
