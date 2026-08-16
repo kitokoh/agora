@@ -16,6 +16,7 @@ import { sessionRoutes } from './routes/session.routes.js';
 import { onboardingRoutes } from './routes/onboarding.routes.js';
 import { socialRoutes } from './routes/social.routes.js';
 import { SocialService } from './social.service.js';
+import { e2eHookRoutes } from './routes/e2e-hook.routes.js';
 
 /**
  * Identity module (M1): registration, verification, sessions, rate
@@ -84,5 +85,6 @@ export const identityModule: AgoraModule = {
     });
     const social = new SocialService(app.prisma, app.config);
     await socialRoutes(app, { social, sessions, audit });
+    await e2eHookRoutes(app, { prisma: app.prisma, tokens });
   },
 };
