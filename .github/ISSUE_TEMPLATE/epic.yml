@@ -1,7 +1,7 @@
-name: "🎯 Epic"
+name: '🎯 Epic'
 description: A milestone-sized body of work with a task checklist.
-title: "[Epic] "
-labels: ["epic"]
+title: '[Epic] '
+labels: ['epic']
 body:
   - type: markdown
     attributes:

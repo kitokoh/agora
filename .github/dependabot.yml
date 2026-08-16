@@ -1,29 +1,29 @@
 version: 2
 updates:
   - package-ecosystem: pnpm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
       day: monday
-      time: "06:00"
+      time: '06:00'
     open-pull-requests-limit: 10
-    labels: ["dependencies", "agent:devops"]
+    labels: ['dependencies', 'agent:devops']
     commit-message:
       prefix: chore(deps)
     groups:
       typescript-tooling:
-        patterns: ["typescript", "tsx", "@types/*"]
+        patterns: ['typescript', 'tsx', '@types/*']
       testing:
-        patterns: ["vitest", "playwright", "@playwright/*"]
+        patterns: ['vitest', 'playwright', '@playwright/*']
       react:
-        patterns: ["react", "react-dom", "next", "next-*"]
+        patterns: ['react', 'react-dom', 'next', 'next-*']
   - package-ecosystem: docker
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

@@ -1,7 +1,7 @@
-name: "🧭 ADR proposal"
+name: '🧭 ADR proposal'
 description: Propose an architecture decision (follow docs/decisions/README).
-title: "[ADR] "
-labels: ["adr", "agent:architect"]
+title: '[ADR] '
+labels: ['adr', 'agent:architect']
 body:
   - type: markdown
     attributes:
