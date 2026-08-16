@@ -25,13 +25,13 @@ class InMemoryTransport implements EmailTransport {
   }
 }
 
-describe.skipIf(!runDbTests)('identity integration (#20-#22)', () => {
+describe.skipIf(!runDbTests)('identity integration (#20-#28)', () => {
   let prisma: PrismaClient;
   let transport: InMemoryTransport;
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeAll(async () => {
-    // Fresh test database: drop/create + apply migrations.
+    // Fresh test database: drop/create + apply migrations (once per file).
     execSync(
       `psql postgresql://agora:agora@localhost:5432/postgres -c "DROP DATABASE IF EXISTS agora_test;" -c "CREATE DATABASE agora_test OWNER agora;"`,
       { stdio: 'pipe' },
@@ -41,16 +41,28 @@ describe.skipIf(!runDbTests)('identity integration (#20-#22)', () => {
       env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
       stdio: 'pipe',
     });
+    // Seed baseline roles/permissions/plans (idempotent).
+    execSync('pnpm exec tsx src/seed.ts', {
+      cwd: import.meta.dirname + '/../../../packages/db',
+      env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
+      stdio: 'pipe',
+    });
 
-    prisma = createPrismaClient();
+    const { Redis } = await import('ioredis');
+    const redis = new Redis(TEST_REDIS_URL);
+    await redis.flushdb();
+    redis.disconnect();
+
+    prisma = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
     await prisma.$connect();
     transport = new InMemoryTransport();
 
     const config = loadConfig({
       NODE_ENV: 'test',
       DATABASE_URL: TEST_DATABASE_URL,
-      REDIS_URL: 'redis://localhost:6379',
+      REDIS_URL: TEST_REDIS_URL,
       PUBLIC_APP_URL: 'http://localhost:3000',
+      MFA_ENCRYPTION_KEY: 'test-mfa-key-0123456789abcdef',
     });
     app = await buildApp({ logger: pino({ level: 'silent' }), config, emailTransport: transport });
   });
@@ -64,6 +76,10 @@ describe.skipIf(!runDbTests)('identity integration (#20-#22)', () => {
     transport.messages = [];
     // Reset identity tables between tests (FK order matters).
     await prisma.$executeRawUnsafe('TRUNCATE "identity"."one_time_tokens", "identity"."audit_events", "identity"."sessions", "identity"."role_assignments", "identity"."users" RESTART IDENTITY CASCADE');
+    const { Redis } = await import('ioredis');
+    const redis = new Redis(TEST_REDIS_URL);
+    await redis.flushdb();
+    redis.disconnect();
   });
 
   it('registers a user (unverified) and sends a verification email', async () => {
@@ -176,7 +192,7 @@ describe.skipIf(!runDbTests)('sessions & recovery (#23-#25)', () => {
     await redis.flushdb();
     redis.disconnect();
 
-    prisma2 = createPrismaClient();
+    prisma2 = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
     transport2 = new InMemoryTransport();
     const config = loadConfig({
       NODE_ENV: 'test',
@@ -359,5 +375,226 @@ describe.skipIf(!runDbTests)('sessions & recovery (#23-#25)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(transport2.messages).toHaveLength(0);
+  });
+});
+
+describe.skipIf(!runDbTests)('MFA & RBAC (#26, #28)', () => {
+  let app3: Awaited<ReturnType<typeof buildApp>>;
+  let transport3: InMemoryTransport;
+  let prisma3: PrismaClient;
+
+  beforeAll(async () => {
+    const { Redis } = await import('ioredis');
+    const redis = new Redis(TEST_REDIS_URL);
+    await redis.flushdb();
+    redis.disconnect();
+
+    prisma3 = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
+    transport3 = new InMemoryTransport();
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: TEST_DATABASE_URL,
+      REDIS_URL: TEST_REDIS_URL,
+      PUBLIC_APP_URL: 'http://localhost:3000',
+      MFA_ENCRYPTION_KEY: 'test-mfa-key-0123456789abcdef',
+    });
+    app3 = await buildApp({ logger: pino({ level: 'silent' }), config, emailTransport: transport3 });
+
+    // Test-only protected route to exercise requirePerm.
+    app3.get(
+      '/v1/test/protected',
+      { preHandler: app3.requirePerm('catalog:write') },
+      async () => ({ allowed: true }),
+    );
+  });
+
+  afterAll(async () => {
+    await app3?.close();
+    await prisma3?.$disconnect();
+  });
+
+  async function freshUser(email: string): Promise<void> {
+    transport3.messages = [];
+    await app3.inject({ method: 'POST', url: '/v1/auth/register', payload: { email, password: 'valid-pass-123' } });
+    const token = /token=([^\s]+)/.exec(transport3.messages[0]!.text!)![1]!;
+    await app3.inject({ method: 'POST', url: '/v1/auth/verify', payload: { token } });
+  }
+
+  async function login(email: string): Promise<{ accessToken: string; refreshToken: string }> {
+    const res = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: 'valid-pass-123' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    if (body.mfaRequired) {
+      throw new Error('unexpected mfaRequired for plain login: ' + email);
+    }
+    return { accessToken: body.accessToken, refreshToken: body.refreshToken };
+  }
+
+  it('RBAC: deny by default, allow with permission; MFA enforced for admin', async () => {
+    const { authenticator } = await import('otplib');
+    const email = `rbac${RUN}@example.com`;
+    await freshUser(email);
+    const { accessToken } = await login(email);
+
+    // No token → 401
+    const anon = await app3.inject({ method: 'GET', url: '/v1/test/protected' });
+    expect(anon.statusCode).toBe(401);
+
+    // Buyer token without catalog:write → 403
+    const buyer = await app3.inject({ method: 'GET', url: '/v1/test/protected', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(buyer.statusCode).toBe(403);
+    expect(buyer.json().error.code).toBe('FORBIDDEN');
+
+    // Grant admin role → MFA is ENFORCED for privileged roles (FR-004).
+    const adminRole = await prisma3.role.findUnique({ where: { name: 'admin' } });
+    const user = await prisma3.user.findUnique({ where: { email: email.toLowerCase() } });
+    await prisma3.roleAssignment.create({ data: { userId: user!.id, roleId: adminRole!.id } });
+
+    const enforced = await app3.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    expect(enforced.statusCode).toBe(428);
+    expect(enforced.json().error.code).toBe('MFA_SETUP_REQUIRED');
+
+    // Enroll MFA, then login with the TOTP code.
+    const setup = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/setup', headers: { authorization: `Bearer ${accessToken}` } });
+    const { secret } = setup.json();
+    await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/enable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'valid-pass-123', secret, code: authenticator.generate(secret) },
+    });
+
+    const challengeRes = await app3.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    expect(challengeRes.json().mfaRequired).toBe(true);
+    const verified = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/verify',
+      payload: { challenge: challengeRes.json().challenge, code: authenticator.generate(secret) },
+    });
+    expect(verified.statusCode).toBe(200);
+    const adminToken = verified.json().accessToken;
+
+    // Admin with catalog:write → allowed.
+    const admin = await app3.inject({ method: 'GET', url: '/v1/test/protected', headers: { authorization: `Bearer ${adminToken}` } });
+    expect(admin.statusCode).toBe(200);
+    expect(admin.json().allowed).toBe(true);
+  });
+
+  it('RBAC: invalid token → 401', async () => {
+    const res = await app3.inject({ method: 'GET', url: '/v1/test/protected', headers: { authorization: 'Bearer not-a-jwt' } });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('MFA: enroll, challenge at login, verify with TOTP code', async () => {
+    const { authenticator } = await import('otplib');
+    const email = `mfa${RUN}@example.com`;
+    await freshUser(email);
+    const { accessToken } = await login(email);
+
+    // setup
+    const setup = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/setup', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(setup.statusCode).toBe(200);
+    const { secret, otpauthUrl } = setup.json();
+    expect(otpauthUrl).toContain('otpauth://totp/');
+
+    // enable with current password + code
+    const code = authenticator.generate(secret);
+    const enable = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/enable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'valid-pass-123', secret, code },
+    });
+    expect(enable.statusCode).toBe(200);
+    expect(enable.json().mfaEnabled).toBe(true);
+    expect(enable.json().recoveryCodes).toHaveLength(10);
+
+    // login now requires the challenge
+    const loginRes = await app3.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    expect(loginRes.statusCode).toBe(200);
+    const challengeBody = loginRes.json();
+    expect(challengeBody.mfaRequired).toBe(true);
+
+    // wrong code → 401
+    const badVerify = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/verify', payload: { challenge: challengeBody.challenge, code: '000000' } });
+    expect(badVerify.statusCode).toBe(401);
+
+    // correct code → tokens
+    const goodCode = authenticator.generate(secret);
+    const goodVerify = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/verify', payload: { challenge: challengeBody.challenge, code: goodCode } });
+    expect(goodVerify.statusCode).toBe(200);
+    expect(goodVerify.json().accessToken).toBeDefined();
+  });
+
+  it('MFA: recovery code completes login and is single-use', async () => {
+    const { authenticator } = await import('otplib');
+    const email = `mfaRec${RUN}@example.com`;
+    await freshUser(email);
+    const { accessToken } = await login(email);
+
+    const setup = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/setup', headers: { authorization: `Bearer ${accessToken}` } });
+    const { secret } = setup.json();
+    const enable = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/enable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'valid-pass-123', secret, code: authenticator.generate(secret) },
+    });
+    const recoveryCodes: string[] = enable.json().recoveryCodes;
+    expect(recoveryCodes).toHaveLength(10);
+
+    // Login challenge, then complete with a recovery code.
+    const loginRes = await app3.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    const { challenge } = loginRes.json();
+
+    const ok = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/verify', payload: { challenge, recoveryCode: recoveryCodes[0] } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().accessToken).toBeDefined();
+
+    // The code is now consumed — a second login attempt with the same code fails.
+    const loginRes2 = await app3.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    const { challenge: challenge2 } = loginRes2.json();
+    const reused = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/verify', payload: { challenge: challenge2, recoveryCode: recoveryCodes[0] } });
+    expect(reused.statusCode).toBe(401);
+
+    const user = await prisma3.user.findUnique({ where: { email: email.toLowerCase() } });
+    expect((user!.mfaBackupCodes as string[])).toHaveLength(9);
+  });
+
+  it('MFA: disable requires password + code', async () => {
+    const { authenticator } = await import('otplib');
+    const email = `mfaDis${RUN}@example.com`;
+    await freshUser(email);
+    const { accessToken } = await login(email);
+
+    const setup = await app3.inject({ method: 'POST', url: '/v1/auth/mfa/setup', headers: { authorization: `Bearer ${accessToken}` } });
+    const { secret } = setup.json();
+    await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/enable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'valid-pass-123', secret, code: authenticator.generate(secret) },
+    });
+
+    const wrong = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/disable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'wrong-pass-123', code: authenticator.generate(secret) },
+    });
+    expect(wrong.statusCode).toBe(401);
+
+    const ok = await app3.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/disable',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { password: 'valid-pass-123', code: authenticator.generate(secret) },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().mfaEnabled).toBe(false);
   });
 });

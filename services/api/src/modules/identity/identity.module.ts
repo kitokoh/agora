@@ -6,6 +6,10 @@ import { OneTimeTokenService } from './tokens.service.js';
 import { AuditService } from './audit.service.js';
 import { SessionService, loadKeyPair } from './sessions.service.js';
 import { AuthRateLimiter } from './rate-limit.service.js';
+import { MfaService } from './mfa.service.js';
+import { PermissionService } from './permissions.service.js';
+import { authnPlugin } from '../../plugins/authn.js';
+import { mfaRoutes } from './routes/mfa.routes.js';
 import { NotificationService, type EmailTransport } from '../notification/notification.module.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { sessionRoutes } from './routes/session.routes.js';
@@ -27,6 +31,12 @@ export const identityModule: AgoraModule = {
 
     const keyPair = await loadKeyPair(app.config);
     const sessions = new SessionService(app.prisma, app.config, audit, keyPair);
+    const permissions = new PermissionService(app.prisma);
+    await permissions.ensureLoaded();
+
+    await app.register(authnPlugin, { sessions, permissions });
+
+    const mfa = new MfaService(app.prisma, app.config.MFA_ENCRYPTION_KEY);
 
     const redis = new Redis(app.config.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
     app.addHook('onClose', async () => {
@@ -51,6 +61,16 @@ export const identityModule: AgoraModule = {
       tokens,
       audit,
       notifications,
+      mfa,
+    });
+    await mfaRoutes(app, {
+      prisma: app.prisma,
+      config: app.config,
+      mfa,
+      sessions,
+      password,
+      audit,
+      rateLimiter,
     });
   },
 };

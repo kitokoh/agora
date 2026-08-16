@@ -30,6 +30,8 @@ const envSchema = z.object({
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   /** MFA challenge TTL in seconds (issued at login when MFA is enabled). */
   MFA_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
+  /** AES-256 key material for MFA secret encryption at rest (min 16 chars). */
+  MFA_ENCRYPTION_KEY: z.string().min(16).default('agora-dev-mfa-key-change-me'),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
