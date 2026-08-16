@@ -2,7 +2,7 @@ import fp from 'fastify-plugin';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import type { FastifyError, FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 export interface SecurityOptions {
   /** Comma-separated allowlist of origins (CORS). Empty = same-origin only. */
@@ -51,30 +51,5 @@ export const securityPlugin = fp(
       timeWindow: options.globalRateLimit.timeWindowMs,
     });
 
-    // Reshape rate-limit and CORS-denial errors into the API error
-    // envelope (packages/contracts) while preserving correct status codes.
-    app.setErrorHandler((error, request, reply) => {
-      const err = error as FastifyError;
-      if (err.statusCode === 429) {
-        return reply.code(429).send({
-          error: {
-            code: 'RATE_LIMITED',
-            message: 'Too many requests — try again later',
-            requestId: request.correlationId,
-          },
-        });
-      }
-      if (err instanceof Error && err.message.includes('CORS')) {
-        return reply.code(403).send({
-          error: {
-            code: 'CORS_DENIED',
-            message: 'Origin not allowed by CORS policy',
-            requestId: request.correlationId,
-          },
-        });
-      }
-      return reply.send(error);
-    });
   },
-  { name: 'agora-security' },
-);
+  { name: 'agora-security' },);
