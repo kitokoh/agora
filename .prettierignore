@@ -8,3 +8,7 @@ playwright-report/
 test-results/
 pnpm-lock.yaml
 *.md
+Makefile
+scripts/*.sh
+docker-compose.yml
+*.md
