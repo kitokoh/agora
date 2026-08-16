@@ -37,11 +37,16 @@ specs/         Spec Kit artifacts: spec / plan / tasks per feature
 
 ```bash
 cp .env.example .env            # fill in secrets (local defaults work)
-docker compose up -d            # postgres, redis, minio, meilisearch
+make up                         # postgres, redis, minio, meilisearch
+make init                       # buckets, indexes, migrations, seeds
 pnpm install
-pnpm db:generate && pnpm db:migrate
 pnpm dev                        # turbo dev: API + web + dashboard
 ```
+
+`make init` runs `scripts/init-local.sh` — it waits for healthy services,
+creates the `agora-media` MinIO bucket and the Meilisearch `products`
+index, applies Prisma migrations, and seeds baseline data (roles,
+permissions, plans). See `Makefile` for the full target list.
 
 ## Documentation
 
