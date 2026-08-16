@@ -25,7 +25,20 @@
 - Health: `/healthz` (liveness, no deps) and `/readyz` (DB, Redis,
   Meilisearch, S3 ping). Both used by ALB/ECS and by `docker compose`.
 
-## 3. Dashboards (Grafana)
+## 3. Local LGTM stack (development)
+
+```bash
+docker compose --profile observability up -d   # prometheus, loki, tempo, grafana
+```
+
+- Grafana: http://localhost:3000 (anonymous admin)
+- OTLP endpoint for services: `http://localhost:4318` (Tempo)
+- Provisioning + dashboards live in `ops/observability/`
+  (`prometheus.yml`, `tempo.yml`, `grafana-provisioning/`, `dashboards/`)
+- Services export when `NODE_ENV=staging|production` (or
+  `exportOnlyInProduction=false`); locally use `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+## 4. Dashboards (Grafana)
 
 1. **Commerce** — checkout success rate, order p95/p99, payment webhook
    lag, ledger balance drift check.
@@ -34,7 +47,7 @@
 4. **Infra** — ECS CPU/mem, RDS/Redis metrics, autoscaling events.
 5. **Business** — GMV, orders/day, sellers, payouts, commission revenue.
 
-## 4. SLOs & Alerting
+## 5. SLOs & Alerting
 
 | SLO | Target | Burn alert |
 | --- | --- | --- |

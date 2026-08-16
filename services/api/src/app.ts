@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { healthPlugin } from './plugins/health.js';
 import { securityPlugin } from './plugins/security.js';
+import { redisProbe } from './infra/redis-probe.js';
 import { registerModules } from './modules/index.js';
 import type { AppConfig } from './config.js';
 
@@ -46,6 +47,7 @@ export async function buildApp({
     globalRateLimit: { max: config.RATE_LIMIT_MAX, timeWindowMs: 60_000 },
   });
   await app.register(healthPlugin);
+  app.registerProbe(redisProbe(config.REDIS_URL));
   await registerModules(app);
 
   return app;

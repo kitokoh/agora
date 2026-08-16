@@ -1,0 +1,62 @@
+{
+  "title": "Agora API — SLOs",
+  "uid": "agora-api-slos",
+  "version": 1,
+  "schemaVersion": 39,
+  "tags": ["agora"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "title": "HTTP requests (p95)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "title": "Error rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m]))",
+          "legendFormat": "5xx rate"
+        }
+      ]
+    },
+    {
+      "title": "Request throughput",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count[5m]))",
+          "legendFormat": "rps"
+        }
+      ]
+    },
+    {
+      "title": "Queue lag",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(agora_queue_lag)",
+          "legendFormat": "lag"
+        }
+      ]
+    }
+  ]
+}
