@@ -5,6 +5,7 @@
  * Output: packages/contracts/openapi.json (committed — CI validates it).
  */
 import { writeFileSync } from 'node:fs';
+import { z } from 'zod';
 import { resolve } from 'node:path';
 import { createDocument } from 'zod-openapi';
 import {
@@ -15,6 +16,11 @@ import {
   authVerifyRequest,
   authVerifyResponse,
   authVerifyResendRequest,
+  authRefreshRequest,
+  authLogoutRequest,
+  passwordResetRequest,
+  passwordResetConfirmRequest,
+  mfaChallengeResponse,
   errorEnvelope,
   healthResponse,
   readyResponse,
@@ -99,6 +105,48 @@ const document = createDocument({
         },
       },
     },
+    '/v1/auth/refresh': {
+      post: {
+        operationId: 'authRefresh',
+        summary: 'Rotate refresh token (session family rotation)',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: authRefreshRequest } } },
+        responses: {
+          '200': { description: 'New token pair', content: { 'application/json': { schema: authLoginResponse } } },
+          '401': { description: 'Invalid/reused token', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/auth/logout': {
+      post: {
+        operationId: 'authLogout',
+        summary: 'Revoke a session',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: authLogoutRequest } } },
+        responses: { '204': { description: 'Revoked' } },
+      },
+    },
+    '/v1/auth/reset/request': {
+      post: {
+        operationId: 'passwordResetRequest',
+        summary: 'Request password reset (non-enumerating)',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: passwordResetRequest } } },
+        responses: { '200': { description: 'Accepted' }, '429': { description: 'Rate limited', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/auth/reset/confirm': {
+      post: {
+        operationId: 'passwordResetConfirm',
+        summary: 'Confirm password reset with one-time token',
+        tags: ['auth'],
+        requestBody: { required: true, content: { 'application/json': { schema: passwordResetConfirmRequest } } },
+        responses: {
+          '200': { description: 'Password updated; all sessions revoked' },
+          '400': { description: 'Invalid token', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
     '/v1/auth/login': {
       post: {
         operationId: 'authLogin',
@@ -109,7 +157,10 @@ const document = createDocument({
           content: { 'application/json': { schema: authLoginRequest } },
         },
         responses: {
-          '200': { description: 'Session established', content: { 'application/json': { schema: authLoginResponse } } },
+          '200': {
+            description: 'Session established (or MFA challenge when required)',
+            content: { 'application/json': { schema: z.union([authLoginResponse, mfaChallengeResponse]) } },
+          },
           '401': { description: 'Invalid credentials', content: { 'application/json': { schema: errorEnvelope } } },
           '423': { description: 'Account locked', content: { 'application/json': { schema: errorEnvelope } } },
         },
@@ -120,4 +171,5 @@ const document = createDocument({
 
 const out = resolve(import.meta.dirname, '../openapi.json');
 writeFileSync(out, JSON.stringify(document, null, 2) + '\n');
+// eslint-disable-next-line no-console -- CLI script output
 console.log(`openapi.json written (${document.paths ? Object.keys(document.paths).length : 0} paths)`);

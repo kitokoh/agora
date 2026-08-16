@@ -152,3 +152,40 @@ export const authVerifyResendRequest = z
   .openapi({ ref: 'AuthVerifyResendRequest' });
 
 export type AuthVerifyResendRequest = z.infer<typeof authVerifyResendRequest>;
+
+export const authRefreshRequest = z
+  .object({ refreshToken: z.string().min(32).max(256) })
+  .openapi({ ref: 'AuthRefreshRequest' });
+
+export type AuthRefreshRequest = z.infer<typeof authRefreshRequest>;
+
+export const authLogoutRequest = z
+  .object({ refreshToken: z.string().min(32).max(256).optional() })
+  .openapi({ ref: 'AuthLogoutRequest' });
+
+export type AuthLogoutRequest = z.infer<typeof authLogoutRequest>;
+
+export const passwordResetRequest = z
+  .object({ email: z.string().trim().email().max(320) })
+  .openapi({ ref: 'PasswordResetRequest' });
+
+export type PasswordResetRequest = z.infer<typeof passwordResetRequest>;
+
+export const passwordResetConfirmRequest = z
+  .object({
+    token: z.string().min(32).max(256),
+    newPassword: z.string().min(8).max(128),
+  })
+  .openapi({ ref: 'PasswordResetConfirmRequest' });
+
+export type PasswordResetConfirmRequest = z.infer<typeof passwordResetConfirmRequest>;
+
+export const mfaChallengeResponse = z
+  .object({
+    mfaRequired: z.literal(true),
+    challenge: z.string().openapi({ description: 'Short-lived MFA challenge token (2 min)' }),
+    userId: uuid,
+  })
+  .openapi({ ref: 'MfaChallengeResponse' });
+
+export type MfaChallengeResponse = z.infer<typeof mfaChallengeResponse>;

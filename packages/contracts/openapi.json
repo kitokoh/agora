@@ -207,6 +207,139 @@
         }
       }
     },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "authRefresh",
+        "summary": "Rotate refresh token (session family rotation)",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New token pair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/reused token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "summary": "Revoke a session",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLogoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          }
+        }
+      }
+    },
+    "/v1/auth/reset/request": {
+      "post": {
+        "operationId": "passwordResetRequest",
+        "summary": "Request password reset (non-enumerating)",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/reset/confirm": {
+      "post": {
+        "operationId": "passwordResetConfirm",
+        "summary": "Confirm password reset with one-time token",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated; all sessions revoked"
+          },
+          "400": {
+            "description": "Invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "operationId": "authLogin",
@@ -226,11 +359,18 @@
         },
         "responses": {
           "200": {
-            "description": "Session established",
+            "description": "Session established (or MFA challenge when required)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthLoginResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthLoginResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -478,29 +618,17 @@
           "email"
         ]
       },
-      "AuthLoginRequest": {
+      "AuthRefreshRequest": {
         "type": "object",
         "properties": {
-          "email": {
+          "refreshToken": {
             "type": "string",
-            "format": "email",
-            "maxLength": 320
-          },
-          "password": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "mfaCode": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "description": "TOTP code when MFA is enabled"
+            "minLength": 32,
+            "maxLength": 256
           }
         },
         "required": [
-          "email",
-          "password"
+          "refreshToken"
         ]
       },
       "AuthLoginResponse": {
@@ -561,6 +689,97 @@
           "expiresIn",
           "tokenType",
           "user"
+        ]
+      },
+      "AuthLogoutRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          }
+        }
+      },
+      "PasswordResetRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "PasswordResetConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ]
+      },
+      "AuthLoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "mfaCode": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "description": "TOTP code when MFA is enabled"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "MfaChallengeResponse": {
+        "type": "object",
+        "properties": {
+          "mfaRequired": {
+            "type": "boolean",
+            "const": true
+          },
+          "challenge": {
+            "type": "string",
+            "description": "Short-lived MFA challenge token (2 min)"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          }
+        },
+        "required": [
+          "mfaRequired",
+          "challenge",
+          "userId"
         ]
       }
     }
