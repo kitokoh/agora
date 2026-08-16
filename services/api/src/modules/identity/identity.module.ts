@@ -13,6 +13,9 @@ import { mfaRoutes } from './routes/mfa.routes.js';
 import { NotificationService, type EmailTransport } from '../notification/notification.module.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { sessionRoutes } from './routes/session.routes.js';
+import { onboardingRoutes } from './routes/onboarding.routes.js';
+import { socialRoutes } from './routes/social.routes.js';
+import { SocialService } from './social.service.js';
 
 /**
  * Identity module (M1): registration, verification, sessions, rate
@@ -72,5 +75,14 @@ export const identityModule: AgoraModule = {
       audit,
       rateLimiter,
     });
+    await onboardingRoutes(app, {
+      prisma: app.prisma,
+      config: app.config,
+      audit,
+      notifications,
+      sessions,
+    });
+    const social = new SocialService(app.prisma, app.config);
+    await socialRoutes(app, { social, sessions, audit });
   },
 };

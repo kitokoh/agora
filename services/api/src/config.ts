@@ -32,6 +32,10 @@ const envSchema = z.object({
   MFA_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
   /** AES-256 key material for MFA secret encryption at rest (min 16 chars). */
   MFA_ENCRYPTION_KEY: z.string().min(16).default('agora-dev-mfa-key-change-me'),
+  /** Auto-approve seller KYC+shops in non-production environments. */
+  AUTO_APPROVE_SHOPS: z
+    .preprocess((v) => (v === undefined ? true : v === 'true' || v === true), z.boolean())
+    .default(true),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
