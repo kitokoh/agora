@@ -41,3 +41,4 @@ data/
 *.tfstate.*
 .terraform/
 crash.log
+*.tsbuildinfo
