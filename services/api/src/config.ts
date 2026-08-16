@@ -23,6 +23,13 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   /** Public web app base URL (used in verification/reset email links). */
   PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
+  /** RS256 key pair for access tokens (ADR-0007). Dev fallback: auto-generated in-memory. */
+  JWT_PRIVATE_KEY: z.string().optional(),
+  JWT_PUBLIC_KEY: z.string().optional(),
+  JWT_ACCESS_TTL: z.string().default('15m'),
+  JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** MFA challenge TTL in seconds (issued at login when MFA is enabled). */
+  MFA_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
