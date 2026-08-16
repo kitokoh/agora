@@ -1,0 +1,859 @@
+// ============================================================================
+// Agora — Prisma schema (source of truth, docs/data-model.md)
+//
+// One logical PostgreSQL database, one PostgreSQL schema per bounded context
+// (ADR-0003). Cross-context references are plain UUID columns (no FKs across
+// contexts); relations only exist within a context.
+//
+// Conventions:
+//   - IDs: uuid(7), time-ordered (index friendly, no coordinator)
+//   - Money: BigInt minor units — NEVER floats (AGENTS.md §7)
+//   - Timestamps: timestamptz UTC; every table has created_at/updated_at
+//   - Soft deletes: shops/products only (deleted_at); users are anonymized
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["identity", "marketplace", "catalog", "orders", "payments", "finance", "notification", "audit"]
+}
+
+// ---------------------------------------------------------------------------
+// identity — users, credentials, sessions, RBAC
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  unverified
+  active
+  suspended
+  deleted
+
+
+  @@schema("identity")
+}
+
+
+enum RoleScope {
+  platform
+  shop
+
+
+  @@schema("identity")
+}
+
+
+model User {
+
+  @@map("users")
+  id           String     @id @default(uuid(7)) @db.Uuid
+  email        String     @unique
+  phone        String?
+  status       UserStatus @default(unverified)
+  locale       String     @default("en")
+  passwordHash String?
+  mfaEnabled   Boolean    @default(false)
+  kycState     KycState   @default(not_started)
+  createdAt    DateTime   @default(now()) @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @db.Timestamptz
+
+  sessions        Session[]
+  roleAssignments RoleAssignment[]
+
+  @@schema("identity")
+}
+
+model Session {
+
+  @@map("sessions")
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @db.Uuid
+  refreshTokenHash  String
+  familyId          String    @db.Uuid
+  ip                String?
+  userAgent         String?
+  expiresAt         DateTime  @db.Timestamptz
+  revokedAt         DateTime? @db.Timestamptz
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@schema("identity")
+}
+
+model Role {
+
+  @@map("roles")
+  id          String    @id @default(uuid(7)) @db.Uuid
+  name        String    @unique
+  description String?
+  scope       RoleScope @default(platform)
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+
+  roleAssignments RoleAssignment[]
+  permissions     RolePermission[]
+
+  @@schema("identity")
+}
+
+model RoleAssignment {
+
+  @@map("role_assignments")
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  shopId    String?  @db.Uuid // marketplace.shops — cross-context, no FK
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, shopId])
+  @@index([shopId])
+  @@schema("identity")
+}
+
+model Permission {
+
+  @@map("permissions")
+  key         String   @id
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  roles RolePermission[]
+
+  @@schema("identity")
+}
+
+model RolePermission {
+
+  @@map("role_permissions")
+  id           String     @id @default(uuid(7)) @db.Uuid
+  roleId       String     @db.Uuid
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [key], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@schema("identity")
+}
+
+// ---------------------------------------------------------------------------
+// marketplace — shops, plans, commissions, KYC, reviews, disputes
+// ---------------------------------------------------------------------------
+
+enum ShopStatus {
+  draft
+  active
+  suspended
+
+
+  @@schema("marketplace")
+}
+
+
+enum BillingCycle {
+  monthly
+  yearly
+
+
+  @@schema("marketplace")
+}
+
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  expired
+
+
+  @@schema("marketplace")
+}
+
+
+enum KycState {
+  not_started
+  draft
+  submitted
+  approved
+  rejected
+
+
+  @@schema("marketplace")
+}
+
+
+enum KycEntityType {
+  individual
+  company
+
+
+  @@schema("marketplace")
+}
+
+
+model Shop {
+
+  @@map("shops")
+  id             String     @id @default(uuid(7)) @db.Uuid
+  ownerId        String     @db.Uuid // identity.users — cross-context, no FK
+  slug           String     @unique
+  name           String
+  logoMediaId    String?    @db.Uuid // catalog.media_assets
+  status         ShopStatus @default(draft)
+  createdAt      DateTime   @default(now()) @db.Timestamptz
+  updatedAt      DateTime   @updatedAt @db.Timestamptz
+  deletedAt      DateTime?  @db.Timestamptz
+
+  subscriptions        ShopPlanSubscription[]
+  commissionConfigs    CommissionConfig[]
+  kyc                  SellerKyc?
+  reviews              Review[]
+  disputes             Dispute[]
+
+  @@index([ownerId])
+  @@schema("marketplace")
+}
+
+model Plan {
+
+  @@map("plans")
+  id           String       @id @default(uuid(7)) @db.Uuid
+  code         String       @unique // free | plus | pro
+  name         String
+  priceMinor   BigInt       @default(0)
+  features     Json
+  billingCycle BillingCycle @default(monthly)
+  createdAt    DateTime     @default(now()) @db.Timestamptz
+
+  subscriptions ShopPlanSubscription[]
+
+  @@schema("marketplace")
+}
+
+model ShopPlanSubscription {
+
+  @@map("shop_plan_subscriptions")
+  id          String             @id @default(uuid(7)) @db.Uuid
+  shopId      String             @db.Uuid
+  planId      String             @db.Uuid
+  status      SubscriptionStatus @default(trialing)
+  periodStart DateTime?          @db.Timestamptz
+  periodEnd   DateTime?          @db.Timestamptz
+  autoRenew   Boolean            @default(true)
+  createdAt   DateTime           @default(now()) @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, status])
+  @@schema("marketplace")
+}
+
+model CommissionConfig {
+
+  @@map("commission_configs")
+  id          String   @id @default(uuid(7)) @db.Uuid
+  shopId      String   @db.Uuid
+  categoryId  String?  @db.Uuid // catalog.categories — cross-context, no FK
+  percentBp   Int      @default(500) // basis points: 500 = 5.00%
+  fixedMinor  BigInt   @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@schema("marketplace")
+}
+
+model SellerKyc {
+
+  @@map("seller_kyc")
+  id                String        @id @default(uuid(7)) @db.Uuid
+  shopId            String        @unique @db.Uuid
+  entityType        KycEntityType
+  docsRefs          Json
+  verificationState KycState      @default(not_started)
+  verifiedAt        DateTime?     @db.Timestamptz
+  createdAt         DateTime      @default(now()) @db.Timestamptz
+  updatedAt         DateTime      @updatedAt @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@schema("marketplace")
+}
+
+model Review {
+
+  @@map("reviews")
+  id          String   @id @default(uuid(7)) @db.Uuid
+  orderLineId String   @unique @db.Uuid // orders.order_lines — cross-context, no FK
+  buyerId     String   @db.Uuid // identity.users
+  productId   String   @db.Uuid // catalog.products
+  shopId      String   @db.Uuid
+  rating      Int
+  title       String?
+  body        String?
+  status      String   @default("pending") // pending | published | rejected | removed
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([shopId, status])
+  @@schema("marketplace")
+}
+
+model Dispute {
+
+  @@map("disputes")
+  id         String    @id @default(uuid(7)) @db.Uuid
+  orderId    String    @db.Uuid // orders.orders — cross-context, no FK
+  openedBy   String    @db.Uuid // identity.users
+  reason     String
+  status     String    @default("open") // open | under_review | resolved | refunded
+  resolution String?
+  evidence   Json
+  shopId     String    @db.Uuid
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@schema("marketplace")
+}
+
+// ---------------------------------------------------------------------------
+// catalog — products, variants, inventory, categories, media
+// ---------------------------------------------------------------------------
+
+enum ProductStatus {
+  draft
+  published
+  archived
+
+
+  @@schema("catalog")
+}
+
+
+enum MediaStatus {
+  pending
+  ready
+  failed
+
+
+  @@schema("catalog")
+}
+
+
+model Product {
+
+  @@map("products")
+  id              String        @id @default(uuid(7)) @db.Uuid
+  shopId          String        @db.Uuid // marketplace.shops — cross-context, no FK
+  slug            String
+  title           String
+  description     String?
+  status          ProductStatus @default(draft)
+  currency        String        @default("USD")
+  basePriceMinor  BigInt
+  media           Json
+  attributes      Json
+  meta            Json
+  createdAt       DateTime      @default(now()) @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @db.Timestamptz
+  deletedAt       DateTime?     @db.Timestamptz
+
+  variants            Variant[]
+  productCategories   ProductCategory[]
+
+  @@unique([shopId, slug])
+  @@index([status])
+  @@schema("catalog")
+}
+
+model Variant {
+
+  @@map("variants")
+  id             String  @id @default(uuid(7)) @db.Uuid
+  productId      String  @db.Uuid
+  shopId         String  @db.Uuid // denormalized for unique-sku-per-shop + lookup
+  sku            String
+  optionValues   Json
+  priceMinor     BigInt
+  compareAtMinor BigInt?
+  stock          Int     @default(0)
+
+  product           Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryMovement InventoryMovement[]
+
+  @@unique([shopId, sku])
+  @@index([productId])
+  @@schema("catalog")
+}
+
+model InventoryMovement {
+
+  @@map("inventory_movements")
+  id          String   @id @default(uuid(7)) @db.Uuid
+  variantId   String   @db.Uuid
+  delta       Int
+  reason      String // sale | reservation | adjust | restock
+  referenceId String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  variant Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@schema("catalog")
+}
+
+model Category {
+
+  @@map("categories")
+  id               String   @id @default(uuid(7)) @db.Uuid
+  parentId         String?  @db.Uuid
+  slug             String   @unique
+  name             String
+  attributesSchema Json
+
+  parent       Category?           @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[]          @relation("CategoryTree")
+  productLinks ProductCategory[]
+
+  @@schema("catalog")
+}
+
+model ProductCategory {
+
+  @@map("product_categories")
+  productId  String   @db.Uuid
+  categoryId String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@schema("catalog")
+}
+
+model MediaAsset {
+
+  @@map("media_assets")
+  id        String      @id @default(uuid(7)) @db.Uuid
+  ownerType String
+  ownerId   String      @db.Uuid
+  bucketKey String
+  mime      String
+  width     Int?
+  height    Int?
+  size      Int
+  checksum  String?
+  status    MediaStatus @default(pending)
+  createdAt DateTime    @default(now()) @db.Timestamptz
+  updatedAt DateTime    @updatedAt @db.Timestamptz
+
+  @@index([ownerType, ownerId])
+  @@schema("catalog")
+}
+
+// ---------------------------------------------------------------------------
+// orders — carts, orders, order lines, status history
+// ---------------------------------------------------------------------------
+
+enum CartStatus {
+  open
+  checked_out
+  abandoned
+
+
+  @@schema("orders")
+}
+
+
+enum OrderStatus {
+  placed
+  paid
+  fulfilled
+  completed
+  canceled
+  refunded
+
+
+  @@schema("orders")
+}
+
+
+model Cart {
+
+  @@map("carts")
+  id        String     @id @default(uuid(7)) @db.Uuid
+  userId    String     @db.Uuid // identity.users — cross-context, no FK
+  status    CartStatus @default(open)
+  currency  String     @default("USD")
+  createdAt DateTime   @default(now()) @db.Timestamptz
+  updatedAt DateTime   @updatedAt @db.Timestamptz
+
+  items CartItem[]
+
+  @@index([userId, status])
+  @@schema("orders")
+}
+
+model CartItem {
+
+  @@map("cart_items")
+  id             String @id @default(uuid(7)) @db.Uuid
+  cartId         String @db.Uuid
+  variantId      String @db.Uuid // catalog.variants — cross-context, no FK
+  shopId         String @db.Uuid
+  qty            Int
+  unitPriceMinor BigInt // price snapshot at add time
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@schema("orders")
+}
+
+model Order {
+
+  @@map("orders")
+  id        String      @id @default(uuid(7)) @db.Uuid
+  number    String      @unique
+  buyerId   String      @db.Uuid // identity.users — cross-context, no FK
+  shopId    String      @db.Uuid // marketplace.shops — cross-context, no FK
+  status    OrderStatus @default(placed)
+  totals    Json // { subtotalMinor, shippingMinor, taxMinor, commissionMinor }
+  currency  String      @default("USD")
+  placedAt  DateTime?   @db.Timestamptz
+  createdAt DateTime    @default(now()) @db.Timestamptz
+  updatedAt DateTime    @updatedAt @db.Timestamptz
+
+  lines   OrderLine[]
+  events  OrderStatusEvent[]
+
+  @@index([buyerId])
+  @@index([shopId, status])
+  @@schema("orders")
+}
+
+model OrderLine {
+
+  @@map("order_lines")
+  id             String      @id @default(uuid(7)) @db.Uuid
+  orderId        String      @db.Uuid
+  variantId      String      @db.Uuid // catalog.variants — cross-context, no FK
+  titleSnapshot  String
+  qty            Int
+  unitPriceMinor BigInt
+  lineTotalMinor BigInt
+  status         OrderStatus @default(placed)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@schema("orders")
+}
+
+model OrderStatusEvent {
+
+  @@map("order_status_events")
+  id       String   @id @default(uuid(7)) @db.Uuid
+  orderId  String   @db.Uuid
+  from     OrderStatus
+  to       OrderStatus
+  at       DateTime @default(now()) @db.Timestamptz
+  actor    String?
+  reason   String?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@schema("orders")
+}
+
+// ---------------------------------------------------------------------------
+// payments — payment intents, provider accounts
+// ---------------------------------------------------------------------------
+
+enum PaymentStatus {
+  requires_payment_method
+  requires_confirmation
+  requires_action
+  processing
+  succeeded
+  canceled
+  failed
+
+
+  @@schema("payments")
+}
+
+
+model PaymentIntent {
+
+  @@map("payment_intents")
+  id                String        @id @default(uuid(7)) @db.Uuid
+  orderId           String        @db.Uuid // orders.orders — cross-context, no FK
+  provider          String        @default("stripe")
+  providerPaymentId String?
+  amountMinor       BigInt
+  currency          String        @default("USD")
+  status            PaymentStatus @default(requires_payment_method)
+  idempotencyKey    String        @unique
+  createdAt         DateTime      @default(now()) @db.Timestamptz
+  updatedAt         DateTime      @updatedAt @db.Timestamptz
+
+  @@index([orderId])
+  @@schema("payments")
+}
+
+model ProviderAccount {
+
+  @@map("provider_accounts")
+  id         String  @id @default(uuid(7)) @db.Uuid
+  shopId     String  @db.Uuid // marketplace.shops — cross-context, no FK
+  provider   String  @default("stripe_connect")
+  externalId String
+  state      String  @default("pending") // pending | active | rejected
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@unique([shopId, provider])
+  @@schema("payments")
+}
+
+// ---------------------------------------------------------------------------
+// finance — double-entry ledger, escrow, payouts
+// ---------------------------------------------------------------------------
+
+enum LedgerAccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+
+
+  @@schema("finance")
+}
+
+
+enum EntryDirection {
+  debit
+  credit
+
+
+  @@schema("finance")
+}
+
+
+enum PayoutStatus {
+  scheduled
+  processing
+  paid
+  failed
+
+
+  @@schema("finance")
+}
+
+
+model LedgerAccount {
+
+  @@map("ledger_accounts")
+  id       String            @id @default(uuid(7)) @db.Uuid
+  code     String            @unique
+  type     LedgerAccountType
+  name     String
+  currency String            @default("USD")
+  createdAt DateTime          @default(now()) @db.Timestamptz
+
+  entries LedgerEntry[]
+
+  @@schema("finance")
+}
+
+model JournalEntry {
+
+  @@map("journal_entries")
+  id        String   @id @default(uuid(7)) @db.Uuid
+  reference String   @unique // e.g. order id — idempotency anchor
+  memo      String?
+  postedAt  DateTime @default(now()) @db.Timestamptz
+
+  entries LedgerEntry[]
+
+  @@schema("finance")
+}
+
+model LedgerEntry {
+
+  @@map("ledger_entries")
+  id          String         @id @default(uuid(7)) @db.Uuid
+  journalId   String         @db.Uuid
+  accountId   String         @db.Uuid
+  direction   EntryDirection
+  amountMinor BigInt
+  currency    String         @default("USD")
+  metadata    Json
+
+  journal JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account LedgerAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([journalId])
+  @@index([accountId])
+  @@schema("finance")
+}
+
+model Payout {
+
+  @@map("payouts")
+  id                String       @id @default(uuid(7)) @db.Uuid
+  shopId            String       @db.Uuid // marketplace.shops — cross-context, no FK
+  providerPayoutId  String?
+  grossMinor        BigInt
+  feeMinor          BigInt       @default(0)
+  netMinor          BigInt
+  status            PayoutStatus @default(scheduled)
+  period            String? // e.g. "2026-08"
+  createdAt         DateTime     @default(now()) @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @db.Timestamptz
+
+  @@index([shopId, status])
+  @@schema("finance")
+}
+
+// ---------------------------------------------------------------------------
+// notification — templates, outbound notifications, webhooks
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  email
+  sms
+  in_app
+
+
+  @@schema("notification")
+}
+
+
+enum NotificationStatus {
+  queued
+  sent
+  delivered
+  failed
+
+
+  @@schema("notification")
+}
+
+
+model NotificationTemplate {
+
+  @@map("notification_templates")
+  id        String   @id @default(uuid(7)) @db.Uuid
+  channel   NotificationChannel
+  event     String
+  locale    String   @default("en")
+  subject   String
+  body      String // mjml / plain
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([channel, event, locale, version])
+  @@schema("notification")
+}
+
+model Notification {
+
+  @@map("notifications")
+  id            String             @id @default(uuid(7)) @db.Uuid
+  userId        String             @db.Uuid // identity.users — cross-context, no FK
+  channel       NotificationChannel
+  event         String
+  payload       Json
+  status        NotificationStatus @default(queued)
+  attemptCount  Int                @default(0)
+  nextAttemptAt DateTime?          @db.Timestamptz
+  referenceId   String? // idempotency anchor: (user, event, reference)
+  createdAt     DateTime           @default(now()) @db.Timestamptz
+  updatedAt     DateTime           @updatedAt @db.Timestamptz
+
+  @@unique([userId, event, referenceId])
+  @@index([status, nextAttemptAt])
+  @@schema("notification")
+}
+
+model WebhookEndpoint {
+
+  @@map("webhook_endpoints")
+  id        String   @id @default(uuid(7)) @db.Uuid
+  shopId    String   @db.Uuid // marketplace.shops — cross-context, no FK
+  url       String
+  secretEnc String
+  events    Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  deliveries WebhookDelivery[]
+
+  @@index([shopId])
+  @@schema("notification")
+}
+
+model WebhookDelivery {
+
+  @@map("webhook_deliveries")
+  id             String   @id @default(uuid(7)) @db.Uuid
+  endpointId     String   @db.Uuid
+  event          String
+  payload        Json
+  responseStatus Int?
+  attempts       Int      @default(0)
+  createdAt      DateTime @default(now()) @db.Timestamptz
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@schema("notification")
+}
+
+// ---------------------------------------------------------------------------
+// audit — append-only platform audit trail (admin + money actions mandatory)
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+
+  @@map("audit_events")
+  id           String   @id @default(uuid(7)) @db.Uuid
+  actorType    String? // user | staff | system
+  actorId      String?  @db.Uuid
+  action       String
+  resourceType String?
+  resourceId   String?
+  diff         Json
+  ip           String?
+  ua           String?
+  at           DateTime @default(now()) @db.Timestamptz
+
+  @@index([at])
+  @@index([actorType, actorId])
+  @@index([resourceType, resourceId])
+  @@schema("audit")
+}
