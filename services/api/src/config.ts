@@ -17,6 +17,10 @@ const envSchema = z.object({
     .string()
     .default('postgresql://agora:agora@localhost:5432/agora?schema=public'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  /** Comma-separated CORS allowlist. Empty string = same-origin only. */
+  CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001,http://localhost:3002'),
+  /** Global rate limit: requests per minute per IP. */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { pino } from 'pino';
 import { buildApp } from '../src/app.js';
+import { loadConfig } from '../src/config.js';
+
+const config = loadConfig({ NODE_ENV: 'test', RATE_LIMIT_MAX: '1000' });
 
 const silentLogger = pino({ level: 'silent' });
 
 describe('api bootstrap', () => {
   it('responds to /healthz with liveness payload', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
     const res = await app.inject({ method: 'GET', url: '/healthz' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -17,7 +20,7 @@ describe('api bootstrap', () => {
   });
 
   it('reports ready on /readyz when all probes pass', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
     const res = await app.inject({ method: 'GET', url: '/readyz' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -26,7 +29,7 @@ describe('api bootstrap', () => {
   });
 
   it('reports not ready on /readyz when a dependency probe fails', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
     app.registerProbe({
       name: 'postgres',
       check: async () => ({ ok: false, detail: 'connection refused' }),
@@ -41,7 +44,7 @@ describe('api bootstrap', () => {
   });
 
   it('echoes an inbound x-request-id and sets one when absent', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
 
     const withHeader = await app.inject({
       method: 'GET',
@@ -56,14 +59,14 @@ describe('api bootstrap', () => {
   });
 
   it('returns a JSON 404 for unknown routes', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
     const res = await app.inject({ method: 'GET', url: '/does-not-exist' });
     expect(res.statusCode).toBe(404);
     expect(res.json().message).toBeDefined();
   });
 
   it('supports injecting the module registry (scaffold is empty but wired)', async () => {
-    const app = await buildApp({ logger: silentLogger });
+    const app = await buildApp({ logger: silentLogger, config });
     // The module registry is a real, ordered list — empty until M1 modules land.
     expect(app).toBeDefined();
     const res = await app.inject({ method: 'GET', url: '/v1' });
