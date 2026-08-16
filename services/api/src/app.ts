@@ -6,6 +6,7 @@ import { healthPlugin } from './plugins/health.js';
 import { securityPlugin } from './plugins/security.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { prismaPlugin } from './plugins/db.js';
+import { metricsPlugin } from './plugins/metrics.js';
 import type { EmailTransport } from './modules/notification/notification.module.js';
 import { redisProbe } from './infra/redis-probe.js';
 import { registerModules } from './modules/index.js';
@@ -61,6 +62,7 @@ export async function buildApp({
   await app.register(requestIdPlugin);
   await app.register(errorHandlerPlugin);
   await app.register(prismaPlugin, { datasourceUrl: config.DATABASE_URL });
+  await app.register(metricsPlugin);
   await app.register(securityPlugin, {
     corsOrigins: config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
     globalRateLimit: { max: config.RATE_LIMIT_MAX, timeWindowMs: 60_000 },

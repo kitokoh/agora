@@ -220,3 +220,22 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
     },
   );
 }
+
+/** Session-info endpoint (audit #55) — used by app middleware for guards. */
+export async function meRoute(app: FastifyInstance, deps: { sessions: SessionService }): Promise<void> {
+  app.get(
+    '/v1/auth/me',
+    { preHandler: app.requirePerm() },
+    async (request) => {
+      const actor = request.actor!;
+      void deps;
+      return {
+        userId: actor.userId,
+        email: actor.email,
+        roles: actor.roles,
+        shopIds: actor.shopIds,
+        permissions: actor.permissions,
+      };
+    },
+  );
+}

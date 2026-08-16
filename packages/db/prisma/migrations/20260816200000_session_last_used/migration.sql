@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "identity"."sessions" ADD COLUMN     "lastUsedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+

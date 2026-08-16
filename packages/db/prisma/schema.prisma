@@ -82,6 +82,7 @@ model Session {
   ip                String?
   userAgent         String?
   expiresAt         DateTime  @db.Timestamptz
+  lastUsedAt        DateTime  @default(now()) @db.Timestamptz
   revokedAt         DateTime? @db.Timestamptz
   createdAt         DateTime  @default(now()) @db.Timestamptz
 
