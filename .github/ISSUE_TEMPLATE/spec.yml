@@ -1,7 +1,7 @@
-name: "📋 Spec (Spec Kit)"
+name: '📋 Spec (Spec Kit)'
 description: New feature specification — start here for any feature work.
-title: "[Spec] "
-labels: ["spec"]
+title: '[Spec] '
+labels: ['spec']
 body:
   - type: markdown
     attributes:
@@ -51,5 +51,5 @@ body:
       label: Hand-off gates
       options:
         - label: Spec written to `specs/<NNN>-<name>/spec.md` following the template
-        - label: `agent:architect` review requested
+        - label: '`agent:architect` review requested'
         - label: Milestone label attached

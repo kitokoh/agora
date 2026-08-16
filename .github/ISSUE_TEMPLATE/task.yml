@@ -1,7 +1,7 @@
-name: "🔧 Task"
+name: '🔧 Task'
 description: A single implementable, testable unit of work for an agent.
-title: ""
-labels: ["task"]
+title: ''
+labels: ['task']
 body:
   - type: markdown
     attributes:
@@ -12,7 +12,7 @@ body:
     id: spec
     attributes:
       label: Linked spec
-      description: "`specs/<NNN>-<name>/spec.md` (or ADR for architecture work)"
+      description: '`specs/<NNN>-<name>/spec.md` (or ADR for architecture work)'
     validations:
       required: true
   - type: textarea

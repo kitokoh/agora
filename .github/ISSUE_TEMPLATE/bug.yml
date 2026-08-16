@@ -1,7 +1,7 @@
-name: "🐛 Bug"
+name: '🐛 Bug'
 description: Something is broken — file with repro steps.
-title: "[Bug] "
-labels: ["bug"]
+title: '[Bug] '
+labels: ['bug']
 body:
   - type: textarea
     id: repro
@@ -32,5 +32,5 @@ body:
     attributes:
       label: Triage
       options:
-        - label: "Money path: label `security` + assign `agent:security`"
+        - label: 'Money path: label `security` + assign `agent:security`'
         - label: Reproduced on staging before fixing
