@@ -598,3 +598,196 @@ describe.skipIf(!runDbTests)('MFA & RBAC (#26, #28)', () => {
     expect(ok.json().mfaEnabled).toBe(false);
   });
 });
+
+describe.skipIf(!runDbTests)('onboarding & notifications (#29, #30)', () => {
+  let app4: Awaited<ReturnType<typeof buildApp>>;
+  let transport4: InMemoryTransport;
+  let prisma4: PrismaClient;
+
+  beforeAll(async () => {
+    prisma4 = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
+    transport4 = new InMemoryTransport();
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: TEST_DATABASE_URL,
+      REDIS_URL: TEST_REDIS_URL,
+      PUBLIC_APP_URL: 'http://localhost:3000',
+      AUTO_APPROVE_SHOPS: 'false',
+    });
+    app4 = await buildApp({ logger: pino({ level: 'silent' }), config, emailTransport: transport4 });
+  });
+
+  afterAll(async () => {
+    await app4?.close();
+    await prisma4?.$disconnect();
+  });
+
+  async function onboardedSeller(email: string): Promise<string> {
+    transport4.messages = [];
+    await app4.inject({ method: 'POST', url: '/v1/auth/register', payload: { email, password: 'valid-pass-123' } });
+    const verifyToken = /token=([^\s]+)/.exec(transport4.messages[0]!.text!)![1]!;
+    await app4.inject({ method: 'POST', url: '/v1/auth/verify', payload: { token: verifyToken } });
+    const login = await app4.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    return login.json().accessToken;
+  }
+
+  it('walks profile → shop → kyc → submit → admin approve', async () => {
+    const email = `sell${RUN}@example.com`;
+    const at = await onboardedSeller(email);
+    const auth = { authorization: `Bearer ${at}` };
+
+    // profile
+    const profile = await app4.inject({ method: 'POST', url: '/v1/onboarding/profile', headers: auth, payload: { fullName: 'Ada Seller', country: 'FR' } });
+    expect(profile.statusCode).toBe(200);
+
+    // shop
+    const shop = await app4.inject({ method: 'POST', url: '/v1/onboarding/shop', headers: auth, payload: { name: 'Ada Boutique', slug: `ada-boutique-${RUN}` } });
+    expect(shop.statusCode).toBe(201);
+    expect(shop.json().shop.status).toBe('draft');
+
+    // slug collision
+    const dup = await app4.inject({ method: 'POST', url: '/v1/onboarding/shop', headers: auth, payload: { name: 'XX', slug: `ada-boutique-${RUN}` } });
+    expect(dup.statusCode).toBe(409);
+    expect(dup.json().error.code).toMatch(/^(SHOP_EXISTS|SLUG_TAKEN)$/);
+
+    // status shows progress
+    const status1 = await app4.inject({ method: 'GET', url: '/v1/onboarding/status', headers: auth });
+    expect(status1.json().step).toBe('kyc');
+
+    // kyc
+    const kyc = await app4.inject({ method: 'POST', url: '/v1/onboarding/kyc', headers: auth, payload: { entityType: 'individual', docsRefs: ['doc-1'] } });
+    expect(kyc.statusCode).toBe(200);
+
+    // submit (no auto-approve in this config)
+    const submitted = await app4.inject({ method: 'POST', url: '/v1/onboarding/submit', headers: auth });
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json().status).toBe('pending_review');
+
+    // seller role assigned at shop creation (shop-scoped)
+    const sellerRole = await prisma4.role.findUnique({ where: { name: 'seller' } });
+    const user = await prisma4.user.findUnique({ where: { email } });
+    const assignment = await prisma4.roleAssignment.findFirst({ where: { userId: user!.id, roleId: sellerRole!.id } });
+    expect(assignment?.shopId).not.toBeNull();
+
+    // admin approve (needs shops:manage — grant admin to a second user)
+    const adminEmail = `admin${RUN}@example.com`;
+    let adminAt = await onboardedSeller(adminEmail);
+    const adminRole = await prisma4.role.findUnique({ where: { name: 'admin' } });
+    const adminUser = await prisma4.user.findUnique({ where: { email: adminEmail } });
+    await prisma4.roleAssignment.create({ data: { userId: adminUser!.id, roleId: adminRole!.id } });
+    // Roles are resolved from the token claims — re-login to pick up admin.
+    // Admin is a privileged role: MFA is enforced (FR-004), so enroll first.
+    const { authenticator } = await import('otplib');
+    const mfaSetup = await app4.inject({ method: 'POST', url: '/v1/auth/mfa/setup', headers: { authorization: `Bearer ${adminAt}` } });
+    const mfaSecret = mfaSetup.json().secret;
+    await app4.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/enable',
+      headers: { authorization: `Bearer ${adminAt}` },
+      payload: { password: 'valid-pass-123', secret: mfaSecret, code: authenticator.generate(mfaSecret) },
+    });
+    const adminLogin = await app4.inject({ method: 'POST', url: '/v1/auth/login', payload: { email: adminEmail, password: 'valid-pass-123' } });
+    expect(adminLogin.json().mfaRequired).toBe(true);
+    const mfaVerify = await app4.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/verify',
+      payload: { challenge: adminLogin.json().challenge, code: authenticator.generate(mfaSecret) },
+    });
+    adminAt = mfaVerify.json().accessToken;
+
+    const shopRow = await prisma4.shop.findFirst({ where: { ownerId: user!.id } });
+    const approve = await app4.inject({
+      method: 'POST',
+      url: `/v1/admin/shops/${shopRow!.id}/approve`,
+      headers: { authorization: `Bearer ${adminAt}` },
+    });
+    expect(approve.statusCode).toBe(200);
+    expect(approve.json().status).toBe('active');
+
+    const updated = await prisma4.shop.findUnique({ where: { id: shopRow!.id } });
+    expect(updated!.status).toBe('active');
+
+    // welcome email sent
+    const last = transport4.messages.at(-1)!;
+    expect(last.event).toBe('marketplace.shop_approved');
+    expect(last.text).toContain('Ada Boutique');
+  });
+
+  it('enforces admin permission on shop actions (403 for sellers)', async () => {
+    const email = `sell403${RUN}@example.com`;
+    const at = await onboardedSeller(email);
+    const res = await app4.inject({
+      method: 'POST',
+      url: `/v1/admin/shops/00000000-0000-0000-0000-000000000000/approve`,
+      headers: { authorization: `Bearer ${at}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe('FORBIDDEN');
+  });
+
+  it('renders versioned notification templates from the seed', async () => {
+    const templates = await prisma4.notificationTemplate.count();
+    expect(templates).toBeGreaterThanOrEqual(7);
+    const loginAlert = await prisma4.notificationTemplate.findFirst({
+      where: { event: 'auth.login_alert', locale: 'en' },
+    });
+    expect(loginAlert?.subject).toContain('sign-in');
+  });
+});
+
+describe.skipIf(!runDbTests)('social login linking (#27)', () => {
+  let app5: Awaited<ReturnType<typeof buildApp>>;
+  let prisma5: PrismaClient;
+
+  beforeAll(async () => {
+    prisma5 = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: TEST_DATABASE_URL,
+      REDIS_URL: TEST_REDIS_URL,
+      PUBLIC_APP_URL: 'http://localhost:3000',
+      GOOGLE_CLIENT_ID: 'fixture-client',
+      GOOGLE_CLIENT_SECRET: 'fixture-secret',
+    });
+    app5 = await buildApp({ logger: pino({ level: 'silent' }), config, emailTransport: { send: async () => {} } });
+  });
+
+  afterAll(async () => {
+    await app5?.close();
+    await prisma5?.$disconnect();
+  });
+
+  it('findOrCreate links an existing account by verified email', async () => {
+    const { SocialService } = await import('../src/modules/identity/social.service.js');
+    const svc = new SocialService(prisma5, app5.config);
+
+    // Existing user via normal registration.
+    await app5.inject({ method: 'POST', url: '/v1/auth/register', payload: { email: 'social@example.com', password: 'valid-pass-123' } });
+    const existing = await prisma5.user.findUnique({ where: { email: 'social@example.com' } });
+    expect(existing).not.toBeNull();
+
+    const linked = await svc.findOrCreate({
+      providerUserId: 'google-123',
+      email: 'social@example.com',
+      emailVerified: true,
+      name: 'Social User',
+    });
+    expect(linked.id).toBe(existing!.id);
+    expect(await prisma5.user.count({ where: { email: 'social@example.com' } })).toBe(1);
+
+    // New verified email → passwordless account created.
+    const created = await svc.findOrCreate({ providerUserId: 'google-456', email: 'newsocial@example.com', emailVerified: true });
+    const createdUser = await prisma5.user.findUnique({ where: { id: created.id } });
+    expect(createdUser!.status).toBe('active');
+    expect(createdUser!.emailVerifiedAt).not.toBeNull();
+    expect(createdUser!.passwordHash).toBeNull();
+  });
+
+  it('rejects unverified provider emails', async () => {
+    const { SocialService } = await import('../src/modules/identity/social.service.js');
+    const svc = new SocialService(prisma5, app5.config);
+    await expect(
+      svc.findOrCreate({ providerUserId: 'x', email: 'unverified@example.com', emailVerified: false }),
+    ).rejects.toMatchObject({ code: 'SOCIAL_EMAIL_UNVERIFIED' });
+  });
+});

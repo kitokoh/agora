@@ -4,10 +4,19 @@ export interface EmailMessage {
   userId: string;
   to: string;
   event: string; // e.g. auth.email_verification
-  subject: string;
-  text: string;
+  subject?: string;
+  text?: string;
+  /** Template variables ({{var}} placeholders rendered from templates). */
+  vars?: Record<string, string | number>;
   /** Idempotency anchor — (user, event, reference) unique in DB. */
   referenceId?: string;
+}
+
+/** Render {{var}} placeholders from a template string. */
+export function renderTemplate(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
+    key in vars ? String(vars[key]) : match,
+  );
 }
 
 export interface EmailTransport {
@@ -70,17 +79,34 @@ export class NotificationService {
   }
 
   async sendEmail(message: EmailMessage): Promise<void> {
+    // Resolve the versioned template (en) when subject/body not provided.
+    let subject = message.subject;
+    let text = message.text;
+    if (!subject || !text) {
+      const template = await this.prisma.notificationTemplate.findFirst({
+        where: { channel: 'email', event: message.event, locale: 'en' },
+        orderBy: { version: 'desc' },
+      });
+      if (template) {
+        subject = subject ?? renderTemplate(template.subject, message.vars ?? {});
+        text = text ?? renderTemplate(template.body, message.vars ?? {});
+      } else {
+        subject = subject ?? message.event;
+        text = text ?? message.event;
+      }
+    }
+
     // Persist for tracking + idempotency (unique userId+event+reference).
     await this.prisma.notification.create({
       data: {
         userId: message.userId,
         channel: 'email' as NotificationChannel,
         event: message.event,
-        payload: { to: message.to, subject: message.subject },
+        payload: { to: message.to, subject },
         status: 'queued' as NotificationStatus,
         referenceId: message.referenceId,
       },
     });
-    await this.transport.send(message);
+    await this.transport.send({ ...message, subject, text });
   }
 }

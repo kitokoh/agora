@@ -67,6 +67,7 @@ model User {
   sessions        Session[]
   roleAssignments RoleAssignment[]
   oneTimeTokens   OneTimeToken[]
+  sellerProfile   SellerProfile?
 
   @@schema("identity")
 }
@@ -146,6 +147,22 @@ model RolePermission {
   permission Permission @relation(fields: [permissionId], references: [key], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
+  @@schema("identity")
+}
+
+model SellerProfile {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @unique @db.Uuid
+  fullName  String
+  phone     String?
+  country   String?
+  bio       String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("seller_profiles")
   @@schema("identity")
 }
 
