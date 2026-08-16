@@ -1,0 +1,25 @@
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+        http:
+
+metrics_generator:
+  storage:
+    path: /tmp/tempo
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces
+
+overrides:
+  metrics_generator_processors: [service-graphs, span-metrics]
