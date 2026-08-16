@@ -42,11 +42,41 @@ export const errorHandlerPlugin = fp(
       });
     });
 
+    // 404/405 — unknown routes use the envelope (request-id correlated).
+    // Track registered paths via onRoute (findRoute misbehaves inside the
+    // not-found handler). Parametric paths match their literal template.
+    const knownPaths = new Set<string>();
+    app.addHook('onRoute', (routeOptions) => {
+      knownPaths.add(routeOptions.url);
+    });
+
+    app.setNotFoundHandler((request, reply) => {
+      const url = request.url.split('?')[0] ?? request.url;
+      if (knownPaths.has(url)) {
+        return reply.code(405).send({
+          error: { code: 'METHOD_NOT_ALLOWED', message: `Method ${request.method} not allowed for ${url}`, requestId: request.correlationId },
+        });
+      }
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: `Route ${request.method}:${request.url} not found`, requestId: request.correlationId },
+      });
+    });
+
     app.setErrorHandler((error, request, reply) => {
       if (error instanceof ApiError) {
         return app.sendApiError(reply, request, error);
       }
       const err = error as Error & { statusCode?: number };
+      if (err.statusCode === 404) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: err.message, requestId: request.correlationId },
+        });
+      }
+      if (err.statusCode === 405) {
+        return reply.code(405).send({
+          error: { code: 'METHOD_NOT_ALLOWED', message: err.message, requestId: request.correlationId },
+        });
+      }
       if (err.statusCode === 429) {
         return reply.code(429).send({
           error: { code: 'RATE_LIMITED', message: 'Too many requests — try again later', requestId: request.correlationId },

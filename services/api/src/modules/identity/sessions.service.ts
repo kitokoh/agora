@@ -39,12 +39,15 @@ const ACCESS_TOKEN_TYPE = 'access';
 export class SessionService {
   private readonly accessTtlSeconds: number;
 
+  private readonly idleTtlDays: number;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly config: AppConfig,
     private readonly audit: AuditService,
     private readonly keyPair: KeyPair,
   ) {
+    this.idleTtlDays = config.JWT_REFRESH_IDLE_TTL_DAYS ?? 7;
     const parsed = /^(\d+)([smhd])$/.exec(config.JWT_ACCESS_TTL);
     const ttl = parsed?.[1];
     const unit = parsed?.[2];
@@ -74,6 +77,7 @@ export class SessionService {
         expiresAt: new Date(
           Date.now() + this.config.JWT_REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
         ),
+        lastUsedAt: new Date(),
       },
     });
     return raw;
@@ -184,6 +188,9 @@ export class SessionService {
     }
     if (session.expiresAt < new Date()) {
       throw new ApiError(401, 'REFRESH_TOKEN_EXPIRED', 'Refresh token has expired');
+    }
+    if (session.lastUsedAt && Date.now() - session.lastUsedAt.getTime() > this.idleTtlDays * 24 * 60 * 60 * 1000) {
+      throw new ApiError(401, 'REFRESH_TOKEN_EXPIRED', 'Session expired due to inactivity');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });

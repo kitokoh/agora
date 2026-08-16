@@ -791,3 +791,98 @@ describe.skipIf(!runDbTests)('social login linking (#27)', () => {
     ).rejects.toMatchObject({ code: 'SOCIAL_EMAIL_UNVERIFIED' });
   });
 });
+
+describe.skipIf(!runDbTests)('audit remediation (#50-#57)', () => {
+  let app6: Awaited<ReturnType<typeof buildApp>>;
+  let transport6: InMemoryTransport;
+  let prisma6: PrismaClient;
+
+  beforeAll(async () => {
+    prisma6 = createPrismaClient({ datasourceUrl: TEST_DATABASE_URL });
+    transport6 = new InMemoryTransport();
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: TEST_DATABASE_URL,
+      REDIS_URL: TEST_REDIS_URL,
+      PUBLIC_APP_URL: 'http://localhost:3000',
+      AUTO_APPROVE_SHOPS: 'false',
+    });
+    app6 = await buildApp({ logger: pino({ level: 'silent' }), config, emailTransport: transport6 });
+  });
+
+  afterAll(async () => {
+    await app6?.close();
+    await prisma6?.$disconnect();
+  });
+
+  it('#50: 404 uses the error envelope with requestId', async () => {
+    const res = await app6.inject({ method: 'GET', url: '/definitely-not-a-route' });
+    expect(res.statusCode).toBe(404);
+    const body = res.json();
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(body.error.requestId).toBeDefined();
+    expect(body.error.requestId).not.toBe('');
+  });
+
+  it('#50: wrong method yields 405 with envelope', async () => {
+    const res = await app6.inject({ method: 'DELETE', url: '/healthz' });
+    expect(res.statusCode).toBe(405);
+    expect(res.json().error.code).toBe('METHOD_NOT_ALLOWED');
+  });
+
+  it('#56: /metrics serves Prometheus text with agora_ metrics', async () => {
+    await app6.inject({ method: 'GET', url: '/healthz' });
+    const res = await app6.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.body).toContain('agora_http_requests_total');
+  });
+
+  it('#52: audit diffs mask emails', async () => {
+    transport6.messages = [];
+    await app6.inject({ method: 'POST', url: '/v1/auth/register', payload: { email: 'pii-check@example.com', password: 'valid-pass-123' } });
+    const events = await prisma6.identityAuditEvent.findMany({ where: { action: 'auth.register' } });
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    const diff = events[0]!.diff as { email?: string };
+    expect(diff.email).toBeDefined();
+    expect(diff.email).not.toContain('pii-check@example.com');
+    expect(diff.email).toContain('@example.com');
+  });
+
+  it('#55: /v1/auth/me returns actor info', async () => {
+    const email = `me${RUN}@example.com`;
+    transport6.messages = [];
+    await app6.inject({ method: 'POST', url: '/v1/auth/register', payload: { email, password: 'valid-pass-123' } });
+    const token = /token=([^\s]+)/.exec(transport6.messages[0]!.text!)![1]!;
+    await app6.inject({ method: 'POST', url: '/v1/auth/verify', payload: { token } });
+    const login = await app6.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    const { accessToken } = login.json();
+
+    const me = await app6.inject({ method: 'GET', url: '/v1/auth/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(me.statusCode).toBe(200);
+    const body = me.json();
+    expect(body.email).toBe(email);
+    expect(Array.isArray(body.roles)).toBe(true);
+    expect(Array.isArray(body.permissions)).toBe(true);
+  });
+
+  it('#51: idle sessions expire on refresh', async () => {
+    const email = `idle${RUN}@example.com`;
+    transport6.messages = [];
+    await app6.inject({ method: 'POST', url: '/v1/auth/register', payload: { email, password: 'valid-pass-123' } });
+    const token = /token=([^\s]+)/.exec(transport6.messages[0]!.text!)![1]!;
+    await app6.inject({ method: 'POST', url: '/v1/auth/verify', payload: { token } });
+    const login = await app6.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: 'valid-pass-123' } });
+    const { refreshToken } = login.json();
+
+    // Age the session beyond the idle TTL (7 days default).
+    await prisma6.session.updateMany({
+      where: { userId: (await prisma6.user.findUnique({ where: { email } }))!.id },
+      data: { lastUsedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) },
+    });
+
+    const refresh = await app6.inject({ method: 'POST', url: '/v1/auth/refresh', payload: { refreshToken } });
+    expect(refresh.statusCode).toBe(401);
+    expect(refresh.json().error.code).toBe('REFRESH_TOKEN_EXPIRED');
+  });
+});

@@ -28,6 +28,8 @@ const envSchema = z.object({
   JWT_PUBLIC_KEY: z.string().optional(),
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** Idle timeout: sessions auto-expire after N days without a refresh. */
+  JWT_REFRESH_IDLE_TTL_DAYS: z.coerce.number().int().positive().default(7),
   /** MFA challenge TTL in seconds (issued at login when MFA is enabled). */
   MFA_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
   /** AES-256 key material for MFA secret encryption at rest (min 16 chars). */

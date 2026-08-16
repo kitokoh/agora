@@ -62,7 +62,8 @@ describe('api bootstrap', () => {
     const app = await buildApp({ logger: silentLogger, config });
     const res = await app.inject({ method: 'GET', url: '/does-not-exist' });
     expect(res.statusCode).toBe(404);
-    expect(res.json().message).toBeDefined();
+    expect(res.json().error.code).toBe('NOT_FOUND');
+    expect(res.json().error.requestId).toBeDefined();
   });
 
   it('supports injecting the module registry (scaffold is empty but wired)', async () => {

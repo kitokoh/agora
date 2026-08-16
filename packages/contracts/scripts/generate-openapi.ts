@@ -50,6 +50,8 @@ const document = createDocument({
         tags: ['ops'],
         responses: {
           '200': { description: 'Service is up', content: { 'application/json': { schema: healthResponse } } },
+          '404': { description: 'Unknown route', content: { 'application/json': { schema: errorEnvelope } } },
+          '405': { description: 'Method not allowed', content: { 'application/json': { schema: errorEnvelope } } },
         },
       },
     },
@@ -133,6 +135,87 @@ const document = createDocument({
         tags: ['auth'],
         requestBody: { required: true, content: { 'application/json': { schema: passwordResetRequest } } },
         responses: { '200': { description: 'Accepted' }, '429': { description: 'Rate limited', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/auth/me': {
+      get: {
+        operationId: 'authMe',
+        summary: 'Current session info (roles, permissions, shopIds)',
+        tags: ['auth'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Actor info' },
+          '401': { description: 'Missing/invalid token', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/onboarding/status': {
+      get: {
+        operationId: 'onboardingStatus',
+        summary: 'Resumable onboarding wizard state',
+        tags: ['onboarding'],
+        security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Current step' }, '401': { description: 'Unauthenticated', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/onboarding/profile': {
+      post: {
+        operationId: 'onboardingProfile',
+        summary: 'Save seller profile (step 1)',
+        tags: ['onboarding'],
+        security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Saved' }, '422': { description: 'Validation', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/onboarding/shop': {
+      post: {
+        operationId: 'onboardingShop',
+        summary: 'Create shop (draft, step 2)',
+        tags: ['onboarding'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '201': { description: 'Shop created (draft)' },
+          '409': { description: 'Shop exists or slug taken', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/onboarding/kyc': {
+      post: {
+        operationId: 'onboardingKyc',
+        summary: 'Save KYC draft (step 3)',
+        tags: ['onboarding'],
+        security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Saved' }, '409': { description: 'Shop required', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/onboarding/submit': {
+      post: {
+        operationId: 'onboardingSubmit',
+        summary: 'Submit for review / auto-approve in dev',
+        tags: ['onboarding'],
+        security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'pending_review or active' }, '409': { description: 'Incomplete', content: { 'application/json': { schema: errorEnvelope } } } },
+      },
+    },
+    '/v1/admin/shops/{id}/approve': {
+      post: {
+        operationId: 'adminShopApprove',
+        summary: 'Approve a shop (staff)',
+        tags: ['admin'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Activated' },
+          '403': { description: 'Missing permission', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/admin/shops/{id}/suspend': {
+      post: {
+        operationId: 'adminShopSuspend',
+        summary: 'Suspend a shop (staff)',
+        tags: ['admin'],
+        security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Suspended' }, '403': { description: 'Missing permission', content: { 'application/json': { schema: errorEnvelope } } } },
       },
     },
     '/v1/auth/mfa/setup': {
