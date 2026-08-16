@@ -33,11 +33,9 @@ const envSchema = z.object({
   /** AES-256 key material for MFA secret encryption at rest (min 16 chars). */
   MFA_ENCRYPTION_KEY: z.string().min(16).default('agora-dev-mfa-key-change-me'),
   /** Enable the /v1/internal/e2e/* test hooks (dev/staging only; production default false). */
-  E2E_TOKEN_HOOK: z.preprocess((v) => v === 'true' || v === true, z.boolean()).default(false),
+  E2E_TOKEN_HOOK: z.preprocess((v) => (v === undefined ? false : v === 'true' || v === true), z.boolean()).default(false),
   /** Auto-approve seller KYC+shops in non-production environments. */
-  AUTO_APPROVE_SHOPS: z
-    .preprocess((v) => (v === undefined ? true : v === 'true' || v === true), z.boolean())
-    .default(true),
+  AUTO_APPROVE_SHOPS: z.preprocess((v) => (v === undefined ? true : v === 'true' || v === true), z.boolean()),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
