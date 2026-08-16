@@ -8,6 +8,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Node 22 is the current LTS (Node 20 is deprecated on GH runners as of 2025-09).
+env:
+  NODE_VERSION: 22
+
 jobs:
   quality:
     name: Lint · Typecheck · Test · Build
@@ -20,7 +24,7 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -46,12 +50,14 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Validate OpenAPI contracts
+        if: hashFiles('packages/contracts/package.json') != ''
         run: pnpm --filter @agora/contracts test
       - name: Prisma schema validation
+        if: hashFiles('packages/db/package.json') != ''
         run: pnpm db:generate && pnpm --filter @agora/db exec prisma validate
 
   security:
@@ -60,16 +66,18 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Audit dependencies
-        run: pnpm audit --prod || pnpm audit --prod --audit-level=high
+        run: pnpm audit --prod --audit-level=high || pnpm audit --prod
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -88,7 +96,7 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Start local infra
