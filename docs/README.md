@@ -7,6 +7,7 @@
 | [architecture.md](architecture.md) | onboarding, any cross-cutting change (C4, modules, money flow) |
 | [data-model.md](data-model.md) | touching schema, adding entities, migrations |
 | [security.md](security.md) | auth, payments, PII, secrets, threat model |
+| [security-asvs-l2.md](security-asvs-l2.md) | M1 auth checklist — ASVS L2 mapping, gaps, sign-off |
 | [observability.md](observability.md) | adding logs/traces/metrics, SLOs, dashboards |
 | [operations.md](operations.md) | environments, CI/CD, migrations, runbooks, DR |
 | [roadmap.md](roadmap.md) | milestone planning, phasing, exit criteria |

@@ -36,11 +36,13 @@ erDiagram
 
 | Table | Key fields | Notes |
 | --- | --- | --- |
-| `users` | id, email (unique, citext), phone, status, locale, password_hash (Argon2id, nullable for social), mfa_enabled, kyc_state | status: `unverified / active / suspended / deleted` |
+| `users` | id, email (unique, citext), phone, status, locale, password_hash (Argon2id, nullable for social), mfa_enabled, mfa_secret_enc, mfa_backup_codes, email_verified_at, last_login_at, kyc_state | status: `unverified / active / suspended / deleted` |
 | `sessions` | id, user_id, refresh_token_hash, family_id, ip, ua, expires_at, revoked_at | refresh rotation; one family per device |
 | `roles` / `role_assignments` | name, scope, user_id | RBAC: buyer, seller, staff, admin; scoped per shop |
 | `permissions` | key, description | fine-grained: `catalog:write`, `payouts:approve`… |
 | `audit_events` | actor, action, target, meta jsonb, ip, at | append-only, 400 d retention |
+| `one_time_tokens` | user_id, purpose (email_verification/password_reset), token_hash (sha256), expires_at, used_at | single-use, purpose-scoped |
+| `seller_profiles` | user_id (unique), full_name, phone, country, bio | onboarding step 1 |
 
 ## marketplace schema
 

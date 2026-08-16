@@ -1,0 +1,18 @@
+{
+  "name": "@agora/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agora end-to-end tests — Playwright critical journeys (issue #32).",
+  "scripts": {
+    "test": "echo \"@agora/e2e: run via pnpm --filter @agora/e2e test:e2e (browsers required)\"",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "echo '@agora/e2e: no build step (test-only workspace)'"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
