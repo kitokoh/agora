@@ -60,8 +60,8 @@ API (OAuth2 client-credentials).
 | `web` | Next.js 15 (App Router, RSC) | Buyer experience: browse, search, product pages, cart, checkout, shop storefronts |
 | `dashboard` | Next.js 15 | Seller ops: catalog, inventory, orders, fulfillment, payouts, analytics, subscription |
 | `admin` | Next.js 15 | Platform ops: moderation, disputes, KYC, commissions, audit |
-| `api` | Node 20 + Fastify (modular monolith) | All business logic, 11 bounded-context modules (below) |
-| `workers` | Node 20 + BullMQ | Async jobs: outbox relay, search index, emails, media processing, payouts, digest |
+| `api` | Node 22 LTS + Fastify (modular monolith) | All business logic, 11 bounded-context modules (below) |
+| `workers` | Node 22 LTS + BullMQ | Async jobs: outbox relay, search index, emails, media processing, payouts, digest |
 | `db` | PostgreSQL 16 (Aurora in prod) | System of record, schema-per-module |
 | `cache/queue` | Redis 7 (ElastiCache in prod) | Cache, BullMQ queues, rate-limit counters, idempotency keys |
 | `search` | Meilisearch | Typo-tolerant full-text + faceted product search |
