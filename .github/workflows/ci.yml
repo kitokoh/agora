@@ -28,6 +28,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
       - name: Lint
         run: pnpm lint
       - name: Typecheck
@@ -43,6 +45,8 @@ jobs:
     name: API contract tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -112,6 +116,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
       - name: Prisma migrations + integration tests
         run: pnpm --filter @agora/db build && pnpm --filter @agora/api test
 

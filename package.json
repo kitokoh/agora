@@ -19,7 +19,8 @@
     "changeset": "changeset",
     "db:generate": "pnpm --filter @agora/db generate",
     "db:migrate": "pnpm --filter @agora/db migrate",
-    "db:studio": "pnpm --filter @agora/db studio"
+    "db:studio": "pnpm --filter @agora/db studio",
+    "postinstall": "pnpm --filter @agora/db generate"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
