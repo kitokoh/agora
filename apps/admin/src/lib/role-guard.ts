@@ -1,17 +1,29 @@
 /**
- * Role-gate stub for the platform admin console (issue #12).
+ * Role gate for the admin back-office edge middleware (#55).
  *
- * M1 RBAC (#28) will evaluate the real session token; today we gate on
- * explicit role lists. The decision shape matches #28's requirePerm.
+ * Takes an *already verified* session (see packages/edge-auth). Admin-only:
+ * requires the `admin` role; everyone else is sent to the buyer app's login
+ * (admins log in through the same identity surface).
  */
+import type { SessionClaims } from '@agora/edge-auth';
+
 export type AdminRoleDecision = { action: 'allow' } | { action: 'redirect'; to: string };
 
-export function evaluateAdminRole(pathname: string, roles: string[] | undefined): AdminRoleDecision {
-  if (!roles || roles.length === 0) {
-    return { action: 'redirect', to: '/login?next=' + encodeURIComponent(pathname) };
+export const ADMIN_LOGIN_URL = process.env.NEXT_PUBLIC_WEB_APP_URL ?? 'http://localhost:3000';
+
+/** session === null → unauthenticated. */
+export function evaluateAdminRole(
+  pathname: string,
+  session: SessionClaims | null,
+): AdminRoleDecision {
+  if (!session) {
+    return {
+      action: 'redirect',
+      to: `${ADMIN_LOGIN_URL}/login?next=${encodeURIComponent(`/admin${pathname === '/' ? '' : pathname}`)}`,
+    };
   }
-  if (!roles.includes('staff') && !roles.includes('admin')) {
-    return { action: 'redirect', to: '/account' };
+  if (!session.roles.includes('admin')) {
+    return { action: 'redirect', to: `${ADMIN_LOGIN_URL}/account` };
   }
   return { action: 'allow' };
 }

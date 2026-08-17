@@ -18,6 +18,7 @@ function ResetConfirmInner() {
       const res = await fetch(`${apiBaseUrl()}/v1/auth/reset/confirm`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ token, newPassword: password }),
       });
       if (!res.ok) {

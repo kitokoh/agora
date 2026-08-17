@@ -117,6 +117,7 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
         'user',
         user.id,
       );
+      app.setSessionCookie(reply, result.accessToken);
       return reply.code(200).send(result);
     },
   );
@@ -124,7 +125,7 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
   app.post(
     '/v1/auth/refresh',
     { config: { rateLimit: { max: 60, timeWindow: '15 minutes' } } },
-    async (request) => {
+    async (request, reply) => {
       const { refreshToken } = parseBody(authRefreshRequest, request.body);
       const result = await sessions.rotateRefreshToken(refreshToken, ctx(request));
       await audit.record(
@@ -133,6 +134,7 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
         'user',
         result.user.id,
       );
+      app.setSessionCookie(reply, result.accessToken);
       return result;
     },
   );
@@ -147,6 +149,7 @@ export async function sessionRoutes(app: FastifyInstance, deps: SessionRoutesDep
         { actorType: 'user', actorId: undefined, ...ctx(request) },
         'auth.logout',
       );
+      app.clearSessionCookie(reply);
       return reply.code(204).send();
     },
   );

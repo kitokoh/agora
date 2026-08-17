@@ -9,6 +9,8 @@ import { AuthRateLimiter } from './rate-limit.service.js';
 import { MfaService } from './mfa.service.js';
 import { PermissionService } from './permissions.service.js';
 import { authnPlugin } from '../../plugins/authn.js';
+import { sessionCookiePlugin } from '../../plugins/session-cookie.js';
+import { jwksRoutes } from './routes/jwks.routes.js';
 import { mfaRoutes } from './routes/mfa.routes.js';
 import { NotificationService, type EmailTransport } from '../notification/notification.module.js';
 import { authRoutes } from './routes/auth.routes.js';
@@ -37,9 +39,12 @@ export const identityModule: AgoraModule = {
     const keyPair = await loadKeyPair(app.config);
     const sessions = new SessionService(app.prisma, app.config, audit, keyPair);
     const permissions = new PermissionService(app.prisma);
-    await permissions.ensureLoaded();
+    // Lazy: permission rows load on first authenticated request. The API
+    // must stay bootable without a database (unit tests / health checks).
 
+    await app.register(sessionCookiePlugin, { config: app.config });
     await app.register(authnPlugin, { sessions, permissions });
+    await jwksRoutes(app, keyPair);
 
     const mfa = new MfaService(app.prisma, app.config.MFA_ENCRYPTION_KEY);
 

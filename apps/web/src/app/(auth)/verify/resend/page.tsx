@@ -12,6 +12,7 @@ export default function ResendPage() {
     await fetch(`${apiBaseUrl()}/v1/auth/verify/resend`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email }),
     });
     setSent(true);

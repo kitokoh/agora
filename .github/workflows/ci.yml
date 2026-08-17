@@ -119,7 +119,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
       - name: Prisma migrations + integration tests
-        run: pnpm --filter @agora/db build && pnpm --filter @agora/api test
+        # turbo builds @agora/db/@agora/contracts/@agora/observability first
+        # (vitest resolves them via dist/, absent on a fresh checkout).
+        run: pnpm turbo run build --filter=@agora/api && pnpm turbo run test --filter=@agora/api
 
   e2e:
     name: E2E (critical journeys)

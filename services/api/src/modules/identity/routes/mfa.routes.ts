@@ -131,6 +131,7 @@ export async function mfaRoutes(app: FastifyInstance, deps: MfaRoutesDeps): Prom
         'user',
         userId,
       );
+      app.setSessionCookie(reply, result.accessToken);
       return reply.code(200).send(result);
     },
   );

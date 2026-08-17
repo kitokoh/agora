@@ -23,6 +23,10 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   /** Public web app base URL (used in verification/reset email links). */
   PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
+  /** Name of the HttpOnly session cookie mirrored from the access token (#55). */
+  SESSION_COOKIE_NAME: z.string().default('agora_session'),
+  /** Mark the session cookie Secure (enable behind TLS; dev defaults false). */
+  COOKIE_SECURE: z.preprocess((v) => (v === undefined ? false : v === 'true' || v === true), z.boolean()).default(false),
   /** RS256 key pair for access tokens (ADR-0007). Dev fallback: auto-generated in-memory. */
   JWT_PRIVATE_KEY: z.string().optional(),
   JWT_PUBLIC_KEY: z.string().optional(),

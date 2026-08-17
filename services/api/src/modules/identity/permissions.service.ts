@@ -12,6 +12,12 @@ export class PermissionService {
   constructor(private readonly prisma: PrismaClient) {}
 
   /** Load role→permissions into the cache (idempotent). */
+  /**
+   * Load role→permissions into the cache (idempotent). Lazy by design: the
+   * API must boot without a reachable database (unit tests, health checks),
+   * so loading only happens on the first authenticated request that needs
+   * authorisation (#CI-fix: quality job runs without a Postgres service).
+   */
   async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     const rows = await this.prisma.rolePermission.findMany({
@@ -24,6 +30,11 @@ export class PermissionService {
       this.cache.set(row.role.name, list);
     }
     this.loaded = true;
+  }
+
+  /** Loaded state (boot-time health check uses this instead of querying). */
+  isLoaded(): boolean {
+    return this.loaded;
   }
 
   async invalidate(): Promise<void> {

@@ -44,10 +44,15 @@ export const authnPlugin = fp(
 
     app.decorate('authenticate', async (request: FastifyRequest, _reply: FastifyReply) => {
       const header = request.headers.authorization;
-      if (!header?.startsWith('Bearer ')) {
+      const cookieName = request.server.sessionCookieName;
+      const cookie = cookieName ? request.cookies?.[cookieName] : undefined;
+      const token =
+        header?.startsWith('Bearer ') ? header.slice('Bearer '.length)
+        : cookie && typeof cookie === 'string' ? cookie
+        : undefined;
+      if (!token) {
         throw new ApiError(401, 'UNAUTHORIZED', 'Missing bearer token');
       }
-      const token = header.slice('Bearer '.length);
       const claims = await sessions.verifyAccessToken(token);
 
       const perms = await permissions.permissionsForRoles(claims.roles);

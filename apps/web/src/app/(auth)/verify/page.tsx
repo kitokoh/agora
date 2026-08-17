@@ -19,6 +19,7 @@ function VerifyInner() {
         const res = await fetch(`${apiBaseUrl()}/v1/auth/verify`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ token }),
         });
         const body = (await res.json().catch(() => null)) as { status?: string; error?: { message?: string } } | null;
