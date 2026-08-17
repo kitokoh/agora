@@ -20,7 +20,10 @@ describe('api bootstrap', () => {
   });
 
   it('reports ready on /readyz when all probes pass', async () => {
-    const app = await buildApp({ logger: silentLogger, config });
+    // dependencyProbes:false keeps this hermetic — the redis probe would
+    // fail on machines (CI) without a local Redis, and /readyz must be
+    // testable without external services.
+    const app = await buildApp({ logger: silentLogger, config, dependencyProbes: false });
     const res = await app.inject({ method: 'GET', url: '/readyz' });
     expect(res.statusCode).toBe(200);
     const body = res.json();

@@ -26,6 +26,8 @@ export interface BuildAppOptions {
   serverOptions?: Partial<FastifyServerOptions>;
   /** Email transport for the notification module (tests capture messages). */
   emailTransport?: EmailTransport;
+  /** Register real dependency probes (redis). Tests set false so /readyz is hermetic. */
+  dependencyProbes?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export async function buildApp({
   config,
   serverOptions,
   emailTransport,
+  dependencyProbes,
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     loggerInstance: logger,
@@ -71,7 +74,9 @@ export async function buildApp({
     globalRateLimit: { max: config.RATE_LIMIT_MAX, timeWindowMs: 60_000 },
   });
   await app.register(healthPlugin);
-  app.registerProbe(redisProbe(config.REDIS_URL));
+  if (dependencyProbes !== false) {
+    app.registerProbe(redisProbe(config.REDIS_URL));
+  }
   await registerModules(app);
 
   return app;
