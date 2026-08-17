@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { identityModule } from './identity/identity.module.js';
+import { catalogModule } from './catalog/catalog.module.js';
 
 /**
  * A bounded-context module inside the modular monolith (docs/architecture.md §3.2).
@@ -22,9 +23,9 @@ export interface AgoraModule {
  */
 export const appModules: AgoraModule[] = [
   identityModule,
+  catalogModule,
   // marketplace — shops, plans, commissions, KYC (M1 onboarding subset)
   // marketplace — shops, plans, commissions, KYC (M1 onboarding subset)
-  // catalog     — products, variants, SKUs, categories (M2)
   // search-indexer — read-side Meilisearch projection (M2)
   // cart        — carts, cart items, price snapshots (M3)
   // orders      — orders, state machine, refunds (M3)

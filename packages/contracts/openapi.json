@@ -771,6 +771,187 @@
           }
         }
       }
+    },
+    "/v1/categories": {
+      "get": {
+        "operationId": "listCategories",
+        "summary": "Category tree (flat; clients nest by parentId)",
+        "tags": [
+          "catalog"
+        ],
+        "responses": {
+          "200": {
+            "description": "All categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/products": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "Public product listing with search + filters",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Category slug"
+          },
+          {
+            "name": "shop",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Shop slug"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "price_asc",
+                "price_desc"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/products/{slug}": {
+      "get": {
+        "operationId": "getProduct",
+        "summary": "Public product detail by slug",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/seller/products": {
+      "post": {
+        "operationId": "createProduct",
+        "summary": "Create a product in the seller's shop (catalog:write)",
+        "tags": [
+          "catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug taken / shop missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1154,6 +1335,492 @@
           "mfaRequired",
           "challenge",
           "userId"
+        ]
+      },
+      "CategoriesResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CategoryNode"
+        }
+      },
+      "CategoryNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "parentId"
+        ]
+      },
+      "ProductListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductSummary"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "ProductSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "basePriceMinor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in minor currency units (e.g. cents), JSON string"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url",
+                "alt"
+              ]
+            },
+            "default": []
+          },
+          "shop": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID v7 identifier",
+                "example": "01961e78-4d99-7c20-8000-000000000000"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "name"
+            ],
+            "description": "Shop snapshot"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductCategoryRef"
+            },
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC timestamp",
+            "example": "2026-08-16T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "status",
+          "currency",
+          "basePriceMinor",
+          "media",
+          "shop",
+          "categories",
+          "createdAt"
+        ]
+      },
+      "ProductCategoryRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ]
+      },
+      "ProductDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID v7 identifier",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "basePriceMinor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in minor currency units (e.g. cents), JSON string"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url",
+                "alt"
+              ]
+            },
+            "default": []
+          },
+          "shop": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID v7 identifier",
+                "example": "01961e78-4d99-7c20-8000-000000000000"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "name"
+            ],
+            "description": "Shop snapshot"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductCategoryRef"
+            },
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 UTC timestamp",
+            "example": "2026-08-16T12:00:00.000Z"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "UUID v7 identifier",
+                  "example": "01961e78-4d99-7c20-8000-000000000000"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "optionValues": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "default": {}
+                },
+                "priceMinor": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Amount in minor currency units (e.g. cents), JSON string"
+                },
+                "compareAtMinor": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Amount in minor currency units (e.g. cents), JSON string"
+                },
+                "stock": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "sku",
+                "optionValues",
+                "priceMinor",
+                "compareAtMinor",
+                "stock"
+              ]
+            },
+            "default": []
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "status",
+          "currency",
+          "basePriceMinor",
+          "media",
+          "shop",
+          "categories",
+          "createdAt",
+          "attributes",
+          "variants"
+        ]
+      },
+      "ProductCreateRequest": {
+        "type": "object",
+        "properties": {
+          "shopId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Shop to own the product; defaults to the actor's first shop",
+            "example": "01961e78-4d99-7c20-8000-000000000000"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "default": "USD"
+          },
+          "basePriceMinor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in minor currency units (e.g. cents), JSON string"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "alt": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "default": ""
+                }
+              },
+              "required": [
+                "url"
+              ]
+            },
+            "maxItems": 12,
+            "default": []
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductVariantInput"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID v7 identifier",
+              "example": "01961e78-4d99-7c20-8000-000000000000"
+            },
+            "maxItems": 20,
+            "default": []
+          }
+        },
+        "required": [
+          "title",
+          "slug",
+          "basePriceMinor",
+          "variants"
+        ]
+      },
+      "ProductVariantInput": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "optionValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "priceMinor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in minor currency units (e.g. cents), JSON string"
+          },
+          "compareAtMinor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in minor currency units (e.g. cents), JSON string"
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "sku",
+          "priceMinor"
         ]
       }
     }
