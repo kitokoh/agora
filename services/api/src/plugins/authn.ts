@@ -83,10 +83,15 @@ export const authnPlugin = fp(
       };
     });
 
-    // Attach the actor when a token is present (public routes still work
-    // without one; requirePerm enforces protection per route).
+    // Attach the actor when a credential is present — bearer header OR the
+    // HttpOnly session cookie (#55). Public routes still work without one;
+    // requirePerm enforces protection per route.
     app.addHook('preHandler', async (request, reply) => {
-      if (!request.headers.authorization) return;
+      const cookieName = request.server.sessionCookieName;
+      const hasCredential =
+        Boolean(request.headers.authorization) ||
+        Boolean(cookieName && request.cookies?.[cookieName]);
+      if (!hasCredential) return;
       request.actor = await app.authenticate(request, reply);
     });
   },

@@ -9,7 +9,6 @@ import { AuthRateLimiter } from './rate-limit.service.js';
 import { MfaService } from './mfa.service.js';
 import { PermissionService } from './permissions.service.js';
 import { authnPlugin } from '../../plugins/authn.js';
-import { sessionCookiePlugin } from '../../plugins/session-cookie.js';
 import { jwksRoutes } from './routes/jwks.routes.js';
 import { mfaRoutes } from './routes/mfa.routes.js';
 import { NotificationService, type EmailTransport } from '../notification/notification.module.js';
@@ -42,7 +41,6 @@ export const identityModule: AgoraModule = {
     // Lazy: permission rows load on first authenticated request. The API
     // must stay bootable without a database (unit tests / health checks).
 
-    await app.register(sessionCookiePlugin, { config: app.config });
     await app.register(authnPlugin, { sessions, permissions });
     await jwksRoutes(app, keyPair);
 
