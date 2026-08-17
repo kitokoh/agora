@@ -44,10 +44,15 @@ export const authnPlugin = fp(
 
     app.decorate('authenticate', async (request: FastifyRequest, _reply: FastifyReply) => {
       const header = request.headers.authorization;
-      if (!header?.startsWith('Bearer ')) {
+      const cookieName = request.server.sessionCookieName;
+      const cookie = cookieName ? request.cookies?.[cookieName] : undefined;
+      const token =
+        header?.startsWith('Bearer ') ? header.slice('Bearer '.length)
+        : cookie && typeof cookie === 'string' ? cookie
+        : undefined;
+      if (!token) {
         throw new ApiError(401, 'UNAUTHORIZED', 'Missing bearer token');
       }
-      const token = header.slice('Bearer '.length);
       const claims = await sessions.verifyAccessToken(token);
 
       const perms = await permissions.permissionsForRoles(claims.roles);
@@ -78,10 +83,15 @@ export const authnPlugin = fp(
       };
     });
 
-    // Attach the actor when a token is present (public routes still work
-    // without one; requirePerm enforces protection per route).
+    // Attach the actor when a credential is present — bearer header OR the
+    // HttpOnly session cookie (#55). Public routes still work without one;
+    // requirePerm enforces protection per route.
     app.addHook('preHandler', async (request, reply) => {
-      if (!request.headers.authorization) return;
+      const cookieName = request.server.sessionCookieName;
+      const hasCredential =
+        Boolean(request.headers.authorization) ||
+        Boolean(cookieName && request.cookies?.[cookieName]);
+      if (!hasCredential) return;
       request.actor = await app.authenticate(request, reply);
     });
   },

@@ -1,18 +1,30 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { verifySessionToken } from '@agora/edge-auth';
 import { evaluateAuthGuard } from '@/lib/auth-guard';
 
+/** API base URL for middleware-side verification (server env). */
+const API_URL = process.env.AGORA_API_URL ?? 'http://localhost:4000';
+
 /**
- * Auth middleware stub (M0, issue #11).
+ * Buyer app edge guard (#55): verifies the HttpOnly `agora_session` cookie
+ * against the API JWKS and applies the auth decision:
+ *   - /account/* requires a valid session → else /login?next=…
+ *   - /login, /register bounce verified users to /account
  *
- * Guards are activated in M1 when the session service lands (#23) — the
- * decision logic lives in `lib/auth-guard.ts` and is unit-tested; this
- * file only applies it to the request.
+ * Fail-closed: any network error reaching the JWKS treats the session as
+ * invalid (redirect to login) — never the reverse.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   response.headers.set('x-agora-edge', 'true');
 
-  const decision = evaluateAuthGuard(request.nextUrl.pathname, request.cookies.has('agora_session'));
+  const token = request.cookies.get('agora_session')?.value;
+  const result = await verifySessionToken(token, {
+    jwksUrl: `${API_URL}/.well-known/jwks.json`,
+  });
+
+  const session = result.ok ? result.claims : null;
+  const decision = evaluateAuthGuard(request.nextUrl.pathname, session);
   if (decision.action === 'redirect') {
     const url = request.nextUrl.clone();
     url.pathname = new URL(decision.to, 'http://local').pathname;

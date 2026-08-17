@@ -1,19 +1,25 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { verifySessionToken } from '@agora/edge-auth';
 import { evaluateDashboardRole } from '@/lib/role-guard';
 
+/** API base URL for middleware-side verification (server env). */
+const API_URL = process.env.AGORA_API_URL ?? 'http://localhost:4000';
+
 /**
- * Dashboard middleware — role gate stub. Reads the (future) session
- * cookie's roles; until #28 lands there is no signed session, so this
- * stays permissive: it only redirects when roles are *explicitly* known
- * to be insufficient.
+ * Seller dashboard edge guard (#55): verifies the HttpOnly session cookie
+ * and requires the `seller` (or `admin`) role. Fail-closed.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   response.headers.set('x-agora-app', 'dashboard');
 
-  // TODO(#28): parse the session cookie and pass real roles.
-  const roles = undefined as string[] | undefined;
-  const decision = evaluateDashboardRole(request.nextUrl.pathname, roles);
+  const token = request.cookies.get('agora_session')?.value;
+  const result = await verifySessionToken(token, {
+    jwksUrl: `${API_URL}/.well-known/jwks.json`,
+  });
+  const session = result.ok ? result.claims : null;
+
+  const decision = evaluateDashboardRole(request.nextUrl.pathname, session);
   if (decision.action === 'redirect') {
     return NextResponse.redirect(new URL(decision.to, request.url));
   }

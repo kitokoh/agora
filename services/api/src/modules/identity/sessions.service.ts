@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { SignJWT, jwtVerify, generateKeyPair, importPKCS8, importSPKI } from 'jose';
-type KeyPair = Awaited<ReturnType<typeof generateKeyPair>>;
+export type KeyPair = Awaited<ReturnType<typeof generateKeyPair>>;
 import type { PrismaClient } from '@agora/db';
 import type { AppConfig } from '../../config.js';
 import { ApiError } from '../../plugins/error-handler.js';

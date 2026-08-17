@@ -15,6 +15,7 @@ export default function ResetRequestPage() {
       const res = await fetch(`${apiBaseUrl()}/v1/auth/reset/request`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email }),
       });
       if (!res.ok) {

@@ -20,10 +20,11 @@ export default function LoginPage() {
       const res = await fetch(`${apiBaseUrl()}/v1/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
       const body = (await res.json().catch(() => null)) as
-        | { accessToken?: string; mfaRequired?: boolean; challenge?: string; userId?: string; error?: { message?: string } }
+        | { accessToken?: string; refreshToken?: string; mfaRequired?: boolean; challenge?: string; userId?: string; error?: { message?: string } }
         | null;
       if (!res.ok || !body) {
         throw new Error(body?.error?.message ?? `Sign in failed (${res.status})`);
@@ -33,9 +34,10 @@ export default function LoginPage() {
         return;
       }
       if (body.accessToken) {
-        // M1: token in memory; HttpOnly cookie session lands with #55
-        // middleware integration.
+        // Token mirrored into the HttpOnly session cookie by the API (#55);
+        // sessionStorage copies support API calls + logout.
         sessionStorage.setItem('agora_access_token', body.accessToken);
+        if (body.refreshToken) sessionStorage.setItem('agora_refresh_token', body.refreshToken);
         router.push('/account');
       }
     } catch (err) {
@@ -95,11 +97,13 @@ function MfaStep({ challenge, onDone }: { challenge: string; onDone: () => void 
       const res = await fetch(`${apiBaseUrl()}/v1/auth/mfa/verify`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ challenge, code }),
       });
-      const body = (await res.json().catch(() => null)) as { accessToken?: string; error?: { message?: string } } | null;
+      const body = (await res.json().catch(() => null)) as { accessToken?: string; refreshToken?: string; error?: { message?: string } } | null;
       if (!res.ok || !body?.accessToken) throw new Error(body?.error?.message ?? 'MFA verification failed');
       sessionStorage.setItem('agora_access_token', body.accessToken);
+      if (body.refreshToken) sessionStorage.setItem('agora_refresh_token', body.refreshToken);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'MFA verification failed');
