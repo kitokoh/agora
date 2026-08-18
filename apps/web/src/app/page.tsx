@@ -16,7 +16,22 @@ export default function HomePage() {
         </p>
       </header>
 
-      <section aria-label="Platform status" className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mt-6 flex gap-3">
+        <a
+          href="/browse"
+          className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700"
+        >
+          Browse products
+        </a>
+        <a
+          href="/login"
+          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Sign in
+        </a>
+      </div>
+
+      <section aria-label="Platform status" className="mt-10 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Platform status</h2>
         <HealthCheck />
       </section>
