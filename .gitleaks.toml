@@ -12,3 +12,8 @@ paths = [
   '''(^|/)package-lock\.json$''',
   '''(^|/)\.env\.example$''',
 ]
+# Clé MFA de TEST (fausse, fixtures d'intégration — mêmes valeurs dans
+# identity.integration.test.ts et catalog.integration.test.ts).
+regexes = [
+  '''test-mfa-key-0123456789abcdef''',
+]

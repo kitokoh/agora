@@ -178,11 +178,50 @@ async function seedNotificationTemplates(): Promise<void> {
   console.log(`seeded ${TEMPLATES.length} notification templates`);
 }
 
+
+/** Starter category set (M2 — issue #65): 3 top-level, 6 children. */
+const CATEGORIES: { slug: string; name: string; parent?: string }[] = [
+  { slug: 'fashion', name: 'Fashion' },
+  { slug: 'fashion-womens', name: 'Women\'s', parent: 'fashion' },
+  { slug: 'fashion-mens', name: 'Men\'s', parent: 'fashion' },
+  { slug: 'fashion-accessories', name: 'Accessories', parent: 'fashion' },
+  { slug: 'home', name: 'Home & Living' },
+  { slug: 'home-decor', name: 'Decor', parent: 'home' },
+  { slug: 'home-keepsakes', name: 'Keepsakes', parent: 'home' },
+  { slug: 'art', name: 'Art & Collectibles' },
+  { slug: 'art-prints', name: 'Prints', parent: 'art' },
+  { slug: 'art-originals', name: 'Original works', parent: 'art' },
+];
+
+async function seedCategories(): Promise<void> {
+  const bySlug = new Map<string, string>();
+  for (const c of CATEGORIES) {
+    const record = await prisma.category.upsert({
+      where: { slug: c.slug },
+      update: { name: c.name },
+      create: { slug: c.slug, name: c.name, attributesSchema: {} },
+    });
+    bySlug.set(c.slug, record.id);
+  }
+  for (const c of CATEGORIES) {
+    if (!c.parent) continue;
+    const parentId = bySlug.get(c.parent);
+    if (parentId) {
+      await prisma.category.update({
+        where: { slug: c.slug },
+        data: { parentId },
+      });
+    }
+  }
+  console.log(`seeded ${CATEGORIES.length} categories`);
+}
+
 async function main(): Promise<void> {
   await seedPermissions();
   await seedRoles();
   await seedPlans();
   await seedNotificationTemplates();
+  await seedCategories();
   console.log('seed complete');
 }
 

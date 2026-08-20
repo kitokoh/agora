@@ -24,6 +24,10 @@ import {
   errorEnvelope,
   healthResponse,
   readyResponse,
+  productCreateRequest,
+  productDetail,
+  productListResponse,
+  categoriesResponse,
 } from '../src/index.js';
 
 const document = createDocument({
@@ -296,6 +300,59 @@ const document = createDocument({
           },
           '401': { description: 'Invalid credentials', content: { 'application/json': { schema: errorEnvelope } } },
           '423': { description: 'Account locked', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/categories': {
+      get: {
+        operationId: 'listCategories',
+        summary: 'Category tree (flat; clients nest by parentId)',
+        tags: ['catalog'],
+        responses: {
+          '200': { description: 'All categories', content: { 'application/json': { schema: categoriesResponse } } },
+        },
+      },
+    },
+    '/v1/products': {
+      get: {
+        operationId: 'listProducts',
+        summary: 'Public product listing with search + filters',
+        tags: ['catalog'],
+        parameters: [
+          { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Free-text search' },
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Category slug' },
+          { name: 'shop', in: 'query', schema: { type: 'string' }, description: 'Shop slug' },
+          { name: 'sort', in: 'query', schema: { type: 'string', enum: ['newest', 'price_asc', 'price_desc'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer' } },
+        ],
+        responses: {
+          '200': { description: 'Paginated products', content: { 'application/json': { schema: productListResponse } } },
+        },
+      },
+    },
+    '/v1/products/{slug}': {
+      get: {
+        operationId: 'getProduct',
+        summary: 'Public product detail by slug',
+        tags: ['catalog'],
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Product detail', content: { 'application/json': { schema: productDetail } } },
+          '404': { description: 'Not found or not published', content: { 'application/json': { schema: errorEnvelope } } },
+        },
+      },
+    },
+    '/v1/seller/products': {
+      post: {
+        operationId: 'createProduct',
+        summary: "Create a product in the seller's shop (catalog:write)",
+        tags: ['catalog'],
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: productCreateRequest } } },
+        responses: {
+          '201': { description: 'Created', content: { 'application/json': { schema: productDetail } } },
+          '409': { description: 'Slug taken / shop missing', content: { 'application/json': { schema: errorEnvelope } } },
         },
       },
     },
